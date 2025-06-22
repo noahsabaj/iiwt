@@ -5,12 +5,6 @@ import {
   Typography,
   Box,
   Chip,
-  Timeline,
-  TimelineItem,
-  TimelineSeparator,
-  TimelineConnector,
-  TimelineContent,
-  TimelineDot,
   TextField,
   InputAdornment,
   Accordion,
@@ -18,10 +12,18 @@ import {
   AccordionDetails,
 } from '@mui/material';
 import {
+  Timeline,
+  TimelineItem,
+  TimelineSeparator,
+  TimelineConnector,
+  TimelineContent,
+  TimelineDot,
+} from '@mui/lab';
+import {
   Schedule as ScheduleIcon,
   Search as SearchIcon,
   ExpandMore as ExpandMoreIcon,
-  Gps as GpsIcon,
+  LocationOn as LocationIcon,
   LocalFireDepartment as ExplosionIcon,
   Flight as MissileIcon,
   Warning as WarningIcon,
@@ -86,7 +88,7 @@ const ConflictTimeline: React.FC = () => {
       title: 'UN Warning on Natanz Contamination',
       description: 'UN nuclear watchdog warns of radiological and chemical contamination at Iran\'s Natanz nuclear facility.',
       location: 'Natanz, Iran',
-      type: 'warning',
+      type: 'evacuation',
       severity: 'high',
       source: 'IAEA'
     },
@@ -128,7 +130,7 @@ const ConflictTimeline: React.FC = () => {
       case 'diplomacy': return <ScheduleIcon />;
       case 'evacuation': return <WarningIcon />;
       case 'casualty': return <WarningIcon />;
-      default: return <GpsIcon />;
+      default: return <LocationIcon />;
     }
   };
 

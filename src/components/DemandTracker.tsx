@@ -89,123 +89,119 @@ const DemandTracker: React.FC = () => {
           Diplomatic talks currently {demands.diplomaticStatus} - no active peace negotiations
         </Alert>
 
-        <Grid container spacing={3}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 3 }}>
           {/* Israeli Demands */}
-          <Grid item xs={12} md={6}>
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ mr: 1 }}>
-                  🇮🇱
-                </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  Israeli Demands
-                </Typography>
-              </Box>
-
-              <Typography variant="subtitle2" sx={{ mb: 1, color: '#ff5722' }}>
-                Primary Conditions:
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ mr: 1 }}>
+                🇮🇱
               </Typography>
-              <List dense sx={{ mb: 2 }}>
-                {demands.israel.demands.map((demand, index) => (
-                  <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
-                    <ListItemIcon sx={{ minWidth: 32 }}>
-                      <FlagIcon sx={{ fontSize: 16, color: '#ff5722' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                          {demand}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
-
-              <Typography variant="subtitle2" sx={{ mb: 1, color: '#d32f2f' }}>
-                Red Lines:
-              </Typography>
-              <List dense>
-                {demands.israel.redLines.map((redLine, index) => (
-                  <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
-                    <ListItemIcon sx={{ minWidth: 32 }}>
-                      <WarningIcon sx={{ fontSize: 16, color: '#d32f2f' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                          {redLine}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
-
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                Last updated: {demands.israel.lastUpdate}
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Israeli Demands
               </Typography>
             </Box>
-          </Grid>
+
+            <Typography variant="subtitle2" sx={{ mb: 1, color: '#ff5722' }}>
+              Primary Conditions:
+            </Typography>
+            <List dense sx={{ mb: 2 }}>
+              {demands.israel.demands.map((demand, index) => (
+                <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    <FlagIcon sx={{ fontSize: 16, color: '#ff5722' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {demand}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+
+            <Typography variant="subtitle2" sx={{ mb: 1, color: '#d32f2f' }}>
+              Red Lines:
+            </Typography>
+            <List dense>
+              {demands.israel.redLines.map((redLine, index) => (
+                <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    <WarningIcon sx={{ fontSize: 16, color: '#d32f2f' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {redLine}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Last updated: {demands.israel.lastUpdate}
+            </Typography>
+          </Box>
 
           {/* Iranian Demands */}
-          <Grid item xs={12} md={6}>
-            <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6" sx={{ mr: 1 }}>
-                  🇮🇷
-                </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                  Iranian Demands
-                </Typography>
-              </Box>
-
-              <Typography variant="subtitle2" sx={{ mb: 1, color: '#ff5722' }}>
-                Primary Conditions:
+          <Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Typography variant="h6" sx={{ mr: 1 }}>
+                🇮🇷
               </Typography>
-              <List dense sx={{ mb: 2 }}>
-                {demands.iran.demands.map((demand, index) => (
-                  <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
-                    <ListItemIcon sx={{ minWidth: 32 }}>
-                      <FlagIcon sx={{ fontSize: 16, color: '#ff5722' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                          {demand}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
-
-              <Typography variant="subtitle2" sx={{ mb: 1, color: '#d32f2f' }}>
-                Red Lines:
-              </Typography>
-              <List dense>
-                {demands.iran.redLines.map((redLine, index) => (
-                  <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
-                    <ListItemIcon sx={{ minWidth: 32 }}>
-                      <WarningIcon sx={{ fontSize: 16, color: '#d32f2f' }} />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={
-                        <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
-                          {redLine}
-                        </Typography>
-                      }
-                    />
-                  </ListItem>
-                ))}
-              </List>
-
-              <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                Last updated: {demands.iran.lastUpdate}
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+                Iranian Demands
               </Typography>
             </Box>
-          </Grid>
-        </Grid>
+
+            <Typography variant="subtitle2" sx={{ mb: 1, color: '#ff5722' }}>
+              Primary Conditions:
+            </Typography>
+            <List dense sx={{ mb: 2 }}>
+              {demands.iran.demands.map((demand, index) => (
+                <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    <FlagIcon sx={{ fontSize: 16, color: '#ff5722' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {demand}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+
+            <Typography variant="subtitle2" sx={{ mb: 1, color: '#d32f2f' }}>
+              Red Lines:
+            </Typography>
+            <List dense>
+              {demands.iran.redLines.map((redLine, index) => (
+                <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 32 }}>
+                    <WarningIcon sx={{ fontSize: 16, color: '#d32f2f' }} />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={
+                      <Typography variant="body2" sx={{ fontSize: '0.875rem' }}>
+                        {redLine}
+                      </Typography>
+                    }
+                  />
+                </ListItem>
+              ))}
+            </List>
+
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+              Last updated: {demands.iran.lastUpdate}
+            </Typography>
+          </Box>
+        </Box>
 
         <Divider sx={{ my: 3 }} />
 

@@ -99,28 +99,24 @@ const CasualtyCounter: React.FC = () => {
         </Box>
 
         {/* Summary Stats */}
-        <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid item xs={6}>
-            <Box sx={{ textAlign: 'center', p: 2, backgroundColor: '#2a1010', borderRadius: 1 }}>
-              <Typography variant="h4" sx={{ color: '#f44336', fontWeight: 700 }}>
-                {totalCasualties}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Total Casualties
-              </Typography>
-            </Box>
-          </Grid>
-          <Grid item xs={6}>
-            <Box sx={{ textAlign: 'center', p: 2, backgroundColor: '#2a1a10', borderRadius: 1 }}>
-              <Typography variant="h4" sx={{ color: '#ff9800', fontWeight: 700 }}>
-                {totalInjured}
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Total Injured
-              </Typography>
-            </Box>
-          </Grid>
-        </Grid>
+        <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+          <Box sx={{ flex: 1, textAlign: 'center', p: 2, backgroundColor: '#2a1010', borderRadius: 1 }}>
+            <Typography variant="h4" sx={{ color: '#f44336', fontWeight: 700 }}>
+              {totalCasualties}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Total Casualties
+            </Typography>
+          </Box>
+          <Box sx={{ flex: 1, textAlign: 'center', p: 2, backgroundColor: '#2a1a10', borderRadius: 1 }}>
+            <Typography variant="h4" sx={{ color: '#ff9800', fontWeight: 700 }}>
+              {totalInjured}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Total Injured
+            </Typography>
+          </Box>
+        </Box>
 
         <Divider sx={{ my: 2 }} />
 
@@ -141,34 +137,30 @@ const CasualtyCounter: React.FC = () => {
               />
             </Box>
 
-            <Grid container spacing={2}>
-              <Grid item xs={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <PersonIcon sx={{ mr: 1, fontSize: 16, color: '#f44336' }} />
-                  <Box>
-                    <Typography variant="h6" sx={{ color: '#f44336', fontWeight: 600 }}>
-                      {item.casualties}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Casualties
-                    </Typography>
-                  </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                <PersonIcon sx={{ mr: 1, fontSize: 16, color: '#f44336' }} />
+                <Box>
+                  <Typography variant="h6" sx={{ color: '#f44336', fontWeight: 600 }}>
+                    {item.casualties}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Casualties
+                  </Typography>
                 </Box>
-              </Grid>
-              <Grid item xs={6}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                  <HospitalIcon sx={{ mr: 1, fontSize: 16, color: '#ff9800' }} />
-                  <Box>
-                    <Typography variant="h6" sx={{ color: '#ff9800', fontWeight: 600 }}>
-                      {item.injured}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Injured
-                    </Typography>
-                  </Box>
+              </Box>
+              <Box sx={{ flex: 1, display: 'flex', alignItems: 'center' }}>
+                <HospitalIcon sx={{ mr: 1, fontSize: 16, color: '#ff9800' }} />
+                <Box>
+                  <Typography variant="h6" sx={{ color: '#ff9800', fontWeight: 600 }}>
+                    {item.injured}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Injured
+                  </Typography>
                 </Box>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
 
             <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
               Last updated: {item.lastUpdate}

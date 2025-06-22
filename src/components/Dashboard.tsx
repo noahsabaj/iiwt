@@ -69,32 +69,22 @@ const Dashboard: React.FC = () => {
 
       {/* Main Content */}
       <Container maxWidth="xl" sx={{ mt: 2, pb: 4 }}>
-        <Grid container spacing={3}>
-          {/* Casualty Statistics */}
-          <Grid item xs={12} lg={6}>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          {/* Top Row - Main Stats */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
             <CasualtyCounter />
-          </Grid>
-
-          {/* Nuclear Facilities Status */}
-          <Grid item xs={12} lg={6}>
             <NuclearFacilitiesMonitor />
-          </Grid>
+          </Box>
 
-          {/* Threat Level Indicator */}
-          <Grid item xs={12} md={6} lg={4}>
+          {/* Middle Row - Threat & Timeline */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 2fr' }, gap: 3 }}>
             <ThreatLevelIndicator />
-          </Grid>
-
-          {/* Timeline */}
-          <Grid item xs={12} md={6} lg={8}>
             <ConflictTimeline />
-          </Grid>
+          </Box>
 
-          {/* Demand Tracker */}
-          <Grid item xs={12}>
-            <DemandTracker />
-          </Grid>
-        </Grid>
+          {/* Bottom Row - Demands */}
+          <DemandTracker />
+        </Box>
       </Container>
 
       {/* Floating Action Button for Alerts */}
