@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Card,
   CardContent,
@@ -16,76 +16,44 @@ import {
   Warning as WarningIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
-  Factory as FactoryIcon,
   Dangerous as RadioactiveIcon,
 } from '@mui/icons-material';
-
-interface NuclearFacility {
-  id: string;
-  name: string;
-  location: string;
-  status: 'operational' | 'damaged' | 'evacuated' | 'offline';
-  lastStrike: string;
-  severity: 'low' | 'moderate' | 'high' | 'critical';
-  radiationRisk: 'none' | 'low' | 'moderate' | 'high';
-}
+import { useConflictData } from '../contexts/ConflictDataContext';
+import { FACILITY_STATUS, RADIATION_RISK } from '../constants';
 
 const NuclearFacilitiesMonitor: React.FC = () => {
-  const [facilities, setFacilities] = useState<NuclearFacility[]>([
-    {
-      id: '1',
-      name: 'Arak Heavy Water Reactor',
-      location: 'Arak, Iran',
-      status: 'evacuated',
-      lastStrike: '6 hours ago',
-      severity: 'high',
-      radiationRisk: 'none',
-    },
-    {
-      id: '2',
-      name: 'Natanz Nuclear Facility',
-      location: 'Natanz, Iran',
-      status: 'damaged',
-      lastStrike: '2 days ago',
-      severity: 'critical',
-      radiationRisk: 'moderate',
-    },
-    {
-      id: '3',
-      name: 'Bushehr Nuclear Plant',
-      location: 'Bushehr, Iran',
-      status: 'operational',
-      lastStrike: 'Never',
-      severity: 'low',
-      radiationRisk: 'none',
-    },
-    {
-      id: '4',
-      name: 'Fordow Fuel Enrichment',
-      location: 'Qom, Iran',
-      status: 'offline',
-      lastStrike: '1 day ago',
-      severity: 'high',
-      radiationRisk: 'low',
-    },
-  ]);
+  const { data: conflictData } = useConflictData();
+
+  if (!conflictData) {
+    return (
+      <Card sx={{ height: '100%' }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+            <LinearProgress sx={{ width: '80%' }} />
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const { facilities } = conflictData;
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'operational': return <CheckCircleIcon sx={{ color: '#4caf50' }} />;
-      case 'damaged': return <ErrorIcon sx={{ color: '#f44336' }} />;
-      case 'evacuated': return <WarningIcon sx={{ color: '#ff9800' }} />;
-      case 'offline': return <ErrorIcon sx={{ color: '#9e9e9e' }} />;
+      case FACILITY_STATUS.OPERATIONAL: return <CheckCircleIcon sx={{ color: '#4caf50' }} />;
+      case FACILITY_STATUS.DAMAGED: return <ErrorIcon sx={{ color: '#f44336' }} />;
+      case FACILITY_STATUS.EVACUATED: return <WarningIcon sx={{ color: '#ff9800' }} />;
+      case FACILITY_STATUS.OFFLINE: return <ErrorIcon sx={{ color: '#9e9e9e' }} />;
       default: return <WarningIcon />;
     }
   };
 
   const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'default' => {
     switch (status) {
-      case 'operational': return 'success';
-      case 'damaged': return 'error';
-      case 'evacuated': return 'warning';
-      case 'offline': return 'default';
+      case FACILITY_STATUS.OPERATIONAL: return 'success';
+      case FACILITY_STATUS.DAMAGED: return 'error';
+      case FACILITY_STATUS.EVACUATED: return 'warning';
+      case FACILITY_STATUS.OFFLINE: return 'default';
       default: return 'default';
     }
   };
@@ -102,18 +70,23 @@ const NuclearFacilitiesMonitor: React.FC = () => {
 
   const getRadiationColor = (risk: string): 'success' | 'warning' | 'error' => {
     switch (risk) {
-      case 'none': return 'success';
-      case 'low': return 'warning';
-      case 'moderate':
-      case 'high': return 'error';
+      case RADIATION_RISK.NONE: return 'success';
+      case RADIATION_RISK.LOW: return 'warning';
+      case RADIATION_RISK.MODERATE:
+      case RADIATION_RISK.HIGH: return 'error';
       default: return 'success';
     }
   };
 
-  const operationalCount = facilities.filter(f => f.status === 'operational').length;
-  const damagedCount = facilities.filter(f => f.status === 'damaged').length;
-  const evacuatedCount = facilities.filter(f => f.status === 'evacuated').length;
-  const offlineCount = facilities.filter(f => f.status === 'offline').length;
+  const operationalCount = facilities.filter(f => f.status === FACILITY_STATUS.OPERATIONAL).length;
+  const damagedCount = facilities.filter(f => f.status === FACILITY_STATUS.DAMAGED).length;
+  const evacuatedCount = facilities.filter(f => f.status === FACILITY_STATUS.EVACUATED).length;
+  const offlineCount = facilities.filter(f => f.status === FACILITY_STATUS.OFFLINE).length;
+
+  // Find facilities with radiation risk
+  const facilitiesWithRadiation = facilities.filter(f => 
+    f.radiationRisk !== RADIATION_RISK.NONE
+  );
 
   return (
     <Card sx={{ height: '100%' }}>
@@ -125,14 +98,19 @@ const NuclearFacilitiesMonitor: React.FC = () => {
           </Typography>
         </Box>
 
-        {/* Radiation Warning */}
-        <Alert 
-          severity="warning" 
-          sx={{ mb: 2, fontSize: '0.875rem' }}
-          icon={<RadioactiveIcon />}
-        >
-          UN reports radiological contamination at Natanz facility
-        </Alert>
+        {/* Dynamic Radiation Warning */}
+        {facilitiesWithRadiation.length > 0 && (
+          <Alert 
+            severity="warning" 
+            sx={{ mb: 2, fontSize: '0.875rem' }}
+            icon={<RadioactiveIcon />}
+          >
+            {facilitiesWithRadiation.length === 1 
+              ? `Radiation detected at ${facilitiesWithRadiation[0].name}`
+              : `Radiation detected at ${facilitiesWithRadiation.length} facilities`
+            }
+          </Alert>
+        )}
 
         {/* Summary Stats */}
         <Box sx={{ display: 'flex', gap: 1, mb: 3, flexWrap: 'wrap' }}>

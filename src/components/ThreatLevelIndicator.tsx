@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Card,
   CardContent,
@@ -7,7 +7,6 @@ import {
   LinearProgress,
   Chip,
   Alert,
-  CircularProgress,
 } from '@mui/material';
 import {
   Security as SecurityIcon,
@@ -15,40 +14,37 @@ import {
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   Public as GlobalIcon,
+  Remove as StableIcon,
 } from '@mui/icons-material';
+import { useConflictData } from '../contexts/ConflictDataContext';
+import { THREAT_LEVELS, THREAT_TRENDS } from '../constants';
 
-interface ThreatLevel {
-  level: 1 | 2 | 3 | 4 | 5;
+interface ThreatLevelConfig {
+  level: number;
   name: string;
   description: string;
   color: string;
   bgColor: string;
 }
 
-interface RegionalThreat {
-  region: string;
-  level: number;
-  trend: 'increasing' | 'stable' | 'decreasing';
-  lastUpdate: string;
-}
-
 const ThreatLevelIndicator: React.FC = () => {
-  const [currentThreatLevel, setCurrentThreatLevel] = useState<ThreatLevel>({
-    level: 4,
-    name: 'SEVERE',
-    description: 'High likelihood of attacks',
-    color: '#d32f2f',
-    bgColor: '#2a1010',
-  });
+  const { data: conflictData } = useConflictData();
 
-  const [regionalThreats, setRegionalThreats] = useState<RegionalThreat[]>([
-    { region: 'Middle East', level: 5, trend: 'increasing', lastUpdate: '2 min ago' },
-    { region: 'Mediterranean', level: 3, trend: 'stable', lastUpdate: '15 min ago' },
-    { region: 'Persian Gulf', level: 4, trend: 'increasing', lastUpdate: '5 min ago' },
-    { region: 'Red Sea', level: 3, trend: 'increasing', lastUpdate: '8 min ago' },
-  ]);
+  if (!conflictData) {
+    return (
+      <Card sx={{ height: '100%' }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+            <LinearProgress sx={{ width: '80%' }} />
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  }
 
-  const threatLevels: ThreatLevel[] = [
+  const { threatLevel } = conflictData;
+
+  const threatLevelConfigs: ThreatLevelConfig[] = [
     { level: 1, name: 'LOW', description: 'Minimal threat', color: '#4caf50', bgColor: '#1a2e1a' },
     { level: 2, name: 'GUARDED', description: 'General risk', color: '#8bc34a', bgColor: '#1e2a1e' },
     { level: 3, name: 'ELEVATED', description: 'Significant risk', color: '#ff9800', bgColor: '#2a1f10' },
@@ -56,43 +52,29 @@ const ThreatLevelIndicator: React.FC = () => {
     { level: 5, name: 'SEVERE', description: 'Severe risk - attacks imminent', color: '#d32f2f', bgColor: '#2a1010' },
   ];
 
+  const currentThreatLevelConfig = threatLevelConfigs[threatLevel.globalLevel - 1] || threatLevelConfigs[3];
+
   const getTrendIcon = (trend: string) => {
     switch (trend) {
-      case 'increasing': return <TrendingUpIcon sx={{ color: '#f44336', fontSize: 16 }} />;
-      case 'decreasing': return <TrendingDownIcon sx={{ color: '#4caf50', fontSize: 16 }} />;
+      case THREAT_TRENDS.INCREASING: return <TrendingUpIcon sx={{ color: '#f44336', fontSize: 16 }} />;
+      case THREAT_TRENDS.DECREASING: return <TrendingDownIcon sx={{ color: '#4caf50', fontSize: 16 }} />;
+      case THREAT_TRENDS.STABLE: return <StableIcon sx={{ color: '#666', fontSize: 16 }} />;
       default: return null;
     }
   };
 
   const getTrendColor = (trend: string): 'error' | 'success' | 'default' => {
     switch (trend) {
-      case 'increasing': return 'error';
-      case 'decreasing': return 'success';
+      case THREAT_TRENDS.INCREASING: return 'error';
+      case THREAT_TRENDS.DECREASING: return 'success';
       default: return 'default';
     }
   };
 
-  // Simulate threat level changes
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // Small chance to change threat level
-      if (Math.random() > 0.95) {
-        const newLevel = Math.max(3, Math.min(5, currentThreatLevel.level + (Math.random() > 0.5 ? 1 : -1)));
-        setCurrentThreatLevel(threatLevels[newLevel - 1]);
-      }
-
-      // Update regional threats
-      setRegionalThreats(prev =>
-        prev.map(region => ({
-          ...region,
-          level: Math.max(2, Math.min(5, region.level + (Math.random() > 0.8 ? (Math.random() > 0.5 ? 1 : -1) : 0))),
-          lastUpdate: Math.random() > 0.7 ? 'Just now' : region.lastUpdate,
-        }))
-      );
-    }, 15000);
-
-    return () => clearInterval(interval);
-  }, [currentThreatLevel]);
+  // Determine if nuclear facilities are under threat
+  const facilitiesUnderThreat = conflictData.facilities.filter(f => 
+    f.status === 'damaged' || f.status === 'evacuated'
+  ).length > 0;
 
   return (
     <Card sx={{ height: '100%' }}>
@@ -107,8 +89,8 @@ const ThreatLevelIndicator: React.FC = () => {
         {/* Current Threat Level */}
         <Box
           sx={{
-            backgroundColor: currentThreatLevel.bgColor,
-            border: `2px solid ${currentThreatLevel.color}`,
+            backgroundColor: currentThreatLevelConfig.bgColor,
+            border: `2px solid ${currentThreatLevelConfig.color}`,
             borderRadius: 2,
             p: 2,
             mb: 3,
@@ -118,71 +100,83 @@ const ThreatLevelIndicator: React.FC = () => {
           <Typography
             variant="h3"
             sx={{
-              color: currentThreatLevel.color,
+              color: currentThreatLevelConfig.color,
               fontWeight: 700,
               mb: 1,
             }}
           >
-            {currentThreatLevel.level}
+            {threatLevel.globalLevel}
           </Typography>
           <Typography
             variant="h6"
             sx={{
-              color: currentThreatLevel.color,
+              color: currentThreatLevelConfig.color,
               fontWeight: 600,
               mb: 1,
             }}
           >
-            {currentThreatLevel.name}
+            {currentThreatLevelConfig.name}
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {currentThreatLevel.description}
+            {currentThreatLevelConfig.description}
           </Typography>
           
           <LinearProgress
             variant="determinate"
-            value={currentThreatLevel.level * 20}
+            value={threatLevel.globalLevel * 20}
             sx={{
               mt: 2,
               height: 8,
               borderRadius: 4,
               backgroundColor: '#333',
               '& .MuiLinearProgress-bar': {
-                backgroundColor: currentThreatLevel.color,
+                backgroundColor: currentThreatLevelConfig.color,
               },
             }}
           />
         </Box>
 
-        {/* Alert */}
-        <Alert
-          severity="error"
-          icon={<WarningIcon />}
-          sx={{ mb: 3, fontSize: '0.875rem' }}
-        >
-          Nuclear facilities under active threat
-        </Alert>
+        {/* Dynamic Alert */}
+        {facilitiesUnderThreat && (
+          <Alert
+            severity="error"
+            icon={<WarningIcon />}
+            sx={{ mb: 3, fontSize: '0.875rem' }}
+          >
+            Nuclear facilities under active threat
+          </Alert>
+        )}
+
+        {threatLevel.globalLevel >= 4 && !facilitiesUnderThreat && (
+          <Alert
+            severity="warning"
+            icon={<WarningIcon />}
+            sx={{ mb: 3, fontSize: '0.875rem' }}
+          >
+            Heightened military activity detected
+          </Alert>
+        )}
 
         {/* Regional Threats */}
         <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
           REGIONAL THREAT LEVELS
         </Typography>
 
-        {regionalThreats.map((region, index) => (
+        {threatLevel.regions.map((region, index) => (
           <Box
-            key={region.region}
+            key={region.name}
             sx={{
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               py: 1,
-              borderBottom: index < regionalThreats.length - 1 ? '1px solid #333' : 'none',
+              borderBottom: index < threatLevel.regions.length - 1 ? '1px solid #333' : 'none',
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
               <GlobalIcon sx={{ mr: 1, fontSize: 16, color: '#666' }} />
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                {region.region}
+                {region.name}
               </Typography>
             </Box>
 

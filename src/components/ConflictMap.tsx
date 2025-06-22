@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   Card,
   CardContent,
@@ -20,124 +20,94 @@ import {
   LocalFireDepartment as FireIcon,
   GpsFixed as TargetIcon,
 } from '@mui/icons-material';
+import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Polyline } from 'react-leaflet';
+import L from 'leaflet';
+import { useConflictData } from '../contexts/ConflictDataContext';
+import { NUCLEAR_FACILITIES, MAP_DEFAULTS } from '../constants';
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
+import markerIcon from 'leaflet/dist/images/marker-icon.png';
+import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 
-// For production, install: npm install leaflet react-leaflet @types/leaflet
-// This is a conceptual implementation
+// Fix Leaflet default icon issue
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
+});
 
-interface MapLocation {
-  id: string;
-  name: string;
-  coordinates: [number, number]; // [lat, lng]
-  type: 'facility' | 'strike' | 'military' | 'city';
-  status?: 'active' | 'damaged' | 'destroyed';
-  lastUpdate?: Date;
-  description?: string;
-}
+// Custom icons for different location types
+const createCustomIcon = (color: string, symbol: string) => L.divIcon({
+  html: `<div style="
+    background-color: ${color};
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    font-size: 16px;
+  ">${symbol}</div>`,
+  iconSize: [30, 30],
+  iconAnchor: [15, 15],
+  popupAnchor: [0, -15],
+  className: 'custom-div-icon',
+});
+
+const facilityIcon = createCustomIcon('#ff9800', '☢️');
+const strikeIcon = createCustomIcon('#f44336', '💥');
+const cityIcon = createCustomIcon('#2196f3', '🏙️');
 
 const ConflictMap: React.FC = () => {
-  const mapRef = useRef<any>(null);
+  const { data: conflictData } = useConflictData();
   const [mapLayer, setMapLayer] = useState<'satellite' | 'terrain' | 'dark'>('dark');
-  const [selectedLocation, setSelectedLocation] = useState<MapLocation | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<any>(null);
 
-  // Key locations in the conflict
-  const locations: MapLocation[] = [
-    // Iranian Nuclear Facilities
-    {
-      id: 'natanz',
-      name: 'Natanz Nuclear Facility',
-      coordinates: [33.7222, 51.9161],
-      type: 'facility',
-      status: 'damaged',
-      description: 'Uranium enrichment facility, reported contamination'
-    },
-    {
-      id: 'arak',
-      name: 'Arak Heavy Water Reactor',
-      coordinates: [34.0541, 49.2311],
-      type: 'facility',
-      status: 'damaged',
-      description: 'Heavy water production, evacuated before strike'
-    },
-    {
-      id: 'bushehr',
-      name: 'Bushehr Nuclear Plant',
-      coordinates: [28.8290, 50.8846],
-      type: 'facility',
-      status: 'active',
-      description: 'Nuclear power plant, operational'
-    },
-    {
-      id: 'fordow',
-      name: 'Fordow Fuel Enrichment',
-      coordinates: [34.8851, 50.9956],
-      type: 'facility',
-      status: 'damaged',
-      description: 'Underground enrichment facility'
-    },
+  // Get dynamic locations from conflict data
+  const getEventLocations = () => {
+    if (!conflictData) return [];
     
-    // Major Cities
-    {
-      id: 'tehran',
-      name: 'Tehran',
-      coordinates: [35.6892, 51.3890],
-      type: 'city'
-    },
-    {
-      id: 'tel-aviv',
-      name: 'Tel Aviv',
-      coordinates: [32.0853, 34.7818],
-      type: 'city'
-    },
-    {
-      id: 'jerusalem',
-      name: 'Jerusalem',
-      coordinates: [31.7683, 35.2137],
-      type: 'city'
-    },
+    const locations: any[] = [];
     
-    // Recent Strike Locations (example)
-    {
-      id: 'strike-1',
-      name: 'Missile Impact Site',
-      coordinates: [32.0667, 34.7833],
-      type: 'strike',
-      lastUpdate: new Date('2025-06-21T18:45:00Z'),
-      description: 'Iranian missile strike on Tel Aviv buildings'
-    }
-  ];
-
-  // Initialize map (using Leaflet concepts)
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    // In production, initialize Leaflet map here
-    // const map = L.map(mapRef.current).setView([31.0, 50.0], 6);
+    // Add recent events from timeline
+    conflictData.timeline.slice(0, 10).forEach((event, index) => {
+      // Try to match event location to known coordinates
+      const location = event.location.toLowerCase();
+      let coords: [number, number] | null = null;
+      
+      if (location.includes('natanz')) coords = [NUCLEAR_FACILITIES.NATANZ.coordinates.lat, NUCLEAR_FACILITIES.NATANZ.coordinates.lng];
+      else if (location.includes('arak')) coords = [NUCLEAR_FACILITIES.ARAK.coordinates.lat, NUCLEAR_FACILITIES.ARAK.coordinates.lng];
+      else if (location.includes('bushehr')) coords = [NUCLEAR_FACILITIES.BUSHEHR.coordinates.lat, NUCLEAR_FACILITIES.BUSHEHR.coordinates.lng];
+      else if (location.includes('fordow') || location.includes('qom')) coords = [NUCLEAR_FACILITIES.FORDOW.coordinates.lat, NUCLEAR_FACILITIES.FORDOW.coordinates.lng];
+      else if (location.includes('tel aviv')) coords = [32.0853, 34.7818];
+      else if (location.includes('tehran')) coords = [35.6892, 51.3890];
+      else if (location.includes('jerusalem')) coords = [31.7683, 35.2137];
+      
+      if (coords) {
+        locations.push({
+          id: `event-${index}`,
+          name: event.title,
+          coordinates: coords,
+          type: 'strike',
+          description: event.description,
+          severity: event.severity,
+          timestamp: event.timestamp,
+        });
+      }
+    });
     
-    // Add tile layers, markers, etc.
-    
-    return () => {
-      // Cleanup map instance
-    };
-  }, []);
-
-  const getLocationIcon = (type: string) => {
-    switch (type) {
-      case 'facility': return '☢️';
-      case 'strike': return '💥';
-      case 'military': return '🎯';
-      case 'city': return '🏙️';
-      default: return '📍';
-    }
+    return locations;
   };
 
-  const getStatusColor = (status?: string) => {
-    switch (status) {
-      case 'active': return '#4caf50';
-      case 'damaged': return '#ff9800';
-      case 'destroyed': return '#f44336';
-      default: return '#2196f3';
-    }
+  const tileLayerUrl = {
+    dark: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    terrain: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}',
+    satellite: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
   };
+
+  const eventLocations = getEventLocations();
 
   return (
     <Card sx={{ height: '100%', minHeight: 500 }}>
@@ -176,23 +146,19 @@ const ConflictMap: React.FC = () => {
                   </Tooltip>
                 </ToggleButton>
               </ToggleButtonGroup>
-              
-              <IconButton size="small">
-                <FullscreenIcon />
-              </IconButton>
             </Box>
           </Box>
 
           {/* Legend */}
           <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
             <Chip 
-              icon={<TargetIcon sx={{ color: '#f44336' }} />} 
+              icon={<TargetIcon sx={{ color: '#ff9800' }} />} 
               label="Nuclear Facility" 
               size="small" 
               variant="outlined"
             />
             <Chip 
-              icon={<FireIcon sx={{ color: '#ff9800' }} />} 
+              icon={<FireIcon sx={{ color: '#f44336' }} />} 
               label="Strike Location" 
               size="small" 
               variant="outlined"
@@ -203,72 +169,121 @@ const ConflictMap: React.FC = () => {
               size="small" 
               variant="outlined"
             />
-            <Chip 
-              icon={<FlightIcon sx={{ color: '#4caf50' }} />} 
-              label="Military Activity" 
-              size="small" 
-              variant="outlined"
-            />
           </Box>
         </Box>
 
         {/* Map Container */}
-        <Box 
-          ref={mapRef}
-          sx={{ 
-            flex: 1, 
-            position: 'relative',
-            backgroundColor: '#0a0a0a',
-            // Placeholder map visualization
-            backgroundImage: 'url("https://api.mapbox.com/styles/v1/mapbox/dark-v10/static/50,32,5,0/1000x600?access_token=YOUR_TOKEN")',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
-          }}
-        >
-          {/* In production, Leaflet map renders here */}
-          {/* For now, show placeholder with location markers */}
-          <Box sx={{ p: 2, color: 'white' }}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
-              Interactive Map Coming Soon
-            </Typography>
+        <Box sx={{ flex: 1, position: 'relative' }}>
+          <MapContainer
+            center={MAP_DEFAULTS.CENTER}
+            zoom={MAP_DEFAULTS.ZOOM}
+            style={{ height: '100%', width: '100%' }}
+            minZoom={MAP_DEFAULTS.MIN_ZOOM}
+            maxZoom={MAP_DEFAULTS.MAX_ZOOM}
+          >
+            <TileLayer
+              url={tileLayerUrl[mapLayer]}
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            />
             
-            {/* Location List (temporary) */}
-            {locations.map(location => (
-              <Box 
+            {/* Nuclear Facilities */}
+            {conflictData && conflictData.facilities.map((facility) => {
+              const facilityInfo = Object.values(NUCLEAR_FACILITIES).find(f => f.name === facility.name);
+              if (!facilityInfo) return null;
+              
+              return (
+                <Marker
+                  key={facility.id}
+                  position={[facilityInfo.coordinates.lat, facilityInfo.coordinates.lng]}
+                  icon={facilityIcon}
+                  eventHandlers={{
+                    click: () => setSelectedLocation(facility),
+                  }}
+                >
+                  <Popup>
+                    <Box sx={{ minWidth: 200 }}>
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                        {facility.name}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        Status: <Chip 
+                          label={facility.status} 
+                          size="small" 
+                          color={
+                            facility.status === 'operational' ? 'success' :
+                            facility.status === 'damaged' ? 'warning' : 'error'
+                          }
+                          sx={{ height: 16, fontSize: '0.7rem' }}
+                        />
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        Radiation: {facility.radiationRisk}
+                      </Typography>
+                      <Typography variant="caption" display="block">
+                        Last Strike: {facility.lastStrike}
+                      </Typography>
+                    </Box>
+                  </Popup>
+                </Marker>
+              );
+            })}
+            
+            {/* Event Locations (Strikes, etc.) */}
+            {eventLocations.map((location) => (
+              <CircleMarker
                 key={location.id}
-                sx={{ 
-                  mb: 1, 
-                  p: 1, 
-                  backgroundColor: 'rgba(0,0,0,0.7)', 
-                  borderRadius: 1,
-                  border: `1px solid ${getStatusColor(location.status)}`,
-                  cursor: 'pointer',
-                  '&:hover': { backgroundColor: 'rgba(0,0,0,0.9)' }
+                center={location.coordinates}
+                radius={location.severity === 'critical' ? 15 : 10}
+                fillColor="#f44336"
+                color="#fff"
+                weight={2}
+                opacity={1}
+                fillOpacity={0.7}
+                eventHandlers={{
+                  click: () => setSelectedLocation(location),
                 }}
-                onClick={() => setSelectedLocation(location)}
               >
-                <Typography variant="body2">
-                  {getLocationIcon(location.type)} {location.name}
-                  {location.status && (
-                    <Chip 
-                      label={location.status} 
-                      size="small" 
-                      sx={{ ml: 1, height: 20 }}
-                      color={
-                        location.status === 'active' ? 'success' :
-                        location.status === 'damaged' ? 'warning' : 'error'
-                      }
-                    />
-                  )}
-                </Typography>
-                {location.description && (
-                  <Typography variant="caption" color="text.secondary">
-                    {location.description}
-                  </Typography>
-                )}
-              </Box>
+                <Popup>
+                  <Box sx={{ minWidth: 250 }}>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                      {location.name}
+                    </Typography>
+                    <Typography variant="caption" display="block" sx={{ mb: 1 }}>
+                      {new Date(location.timestamp).toLocaleString()}
+                    </Typography>
+                    <Typography variant="body2">
+                      {location.description}
+                    </Typography>
+                  </Box>
+                </Popup>
+              </CircleMarker>
             ))}
-          </Box>
+            
+            {/* Major Cities */}
+            <Marker position={[35.6892, 51.3890]} icon={cityIcon}>
+              <Popup>Tehran, Iran</Popup>
+            </Marker>
+            <Marker position={[32.0853, 34.7818]} icon={cityIcon}>
+              <Popup>Tel Aviv, Israel</Popup>
+            </Marker>
+            <Marker position={[31.7683, 35.2137]} icon={cityIcon}>
+              <Popup>Jerusalem</Popup>
+            </Marker>
+            
+            {/* Example missile trajectory */}
+            {eventLocations.length > 0 && (
+              <Polyline
+                positions={[
+                  [35.6892, 51.3890], // Tehran
+                  [32.0853, 34.7818], // Tel Aviv
+                ]}
+                color="#ff5722"
+                weight={2}
+                opacity={0.7}
+                dashArray="10, 10"
+              />
+            )}
+          </MapContainer>
         </Box>
 
         {/* Selected Location Details */}
@@ -277,9 +292,11 @@ const ConflictMap: React.FC = () => {
             <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
               {selectedLocation.name}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              Coordinates: {selectedLocation.coordinates[0]}°N, {selectedLocation.coordinates[1]}°E
-            </Typography>
+            {selectedLocation.location && (
+              <Typography variant="caption" color="text.secondary">
+                📍 {selectedLocation.location}
+              </Typography>
+            )}
             {selectedLocation.description && (
               <Typography variant="body2" sx={{ mt: 1 }}>
                 {selectedLocation.description}
@@ -293,31 +310,3 @@ const ConflictMap: React.FC = () => {
 };
 
 export default ConflictMap;
-
-/**
- * To implement a real interactive map:
- * 
- * 1. Install dependencies:
- *    npm install leaflet react-leaflet @types/leaflet
- * 
- * 2. Or use Mapbox:
- *    npm install mapbox-gl react-map-gl
- * 
- * 3. Features to add:
- *    - Real-time flight tracking overlay
- *    - Heat maps for conflict intensity
- *    - Missile trajectory lines
- *    - Radius circles for blast zones
- *    - Before/after satellite imagery
- *    - Live weather overlay
- *    - Military base locations
- *    - No-fly zones
- *    - Naval vessel tracking
- * 
- * 4. Data sources for map:
- *    - OpenStreetMap for base layer
- *    - Maxar/Planet Labs for satellite imagery
- *    - FIRMS for fire detection
- *    - FlightRadar24 for aircraft
- *    - MarineTraffic for ships
- */

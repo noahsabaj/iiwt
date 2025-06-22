@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import {
   Card,
   CardContent,
   Typography,
-  Grid,
   Box,
   Divider,
   Chip,
@@ -14,63 +13,67 @@ import {
   LocalHospital as HospitalIcon,
   Update as UpdateIcon,
 } from '@mui/icons-material';
-
-interface CasualtyData {
-  country: string;
-  flag: string;
-  casualties: number;
-  injured: number;
-  lastUpdate: string;
-  trend: 'increasing' | 'stable' | 'decreasing';
-}
+import { useConflictData } from '../contexts/ConflictDataContext';
+import { THREAT_TRENDS } from '../constants';
 
 const CasualtyCounter: React.FC = () => {
-  const [data, setData] = useState<CasualtyData[]>([
-    {
-      country: 'Israel',
-      flag: '🇮🇱',
-      casualties: 24,
-      injured: 685,
-      lastUpdate: '2 min ago',
-      trend: 'increasing',
-    },
-    {
-      country: 'Iran',
-      flag: '🇮🇷',
-      casualties: 156,
-      injured: 892,
-      lastUpdate: '5 min ago',
-      trend: 'increasing',
-    },
-  ]);
+  const { data: conflictData } = useConflictData();
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setData(prevData =>
-        prevData.map(item => ({
-          ...item,
-          // Simulate small random increases
-          casualties: item.casualties + (Math.random() > 0.95 ? 1 : 0),
-          injured: item.injured + (Math.random() > 0.9 ? Math.floor(Math.random() * 3) : 0),
-          lastUpdate: Math.random() > 0.7 ? 'Just now' : item.lastUpdate,
-        }))
-      );
-    }, 10000); // Update every 10 seconds
+  if (!conflictData) {
+    return (
+      <Card sx={{ height: '100%' }}>
+        <CardContent>
+          <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
+            <LinearProgress sx={{ width: '80%' }} />
+          </Box>
+        </CardContent>
+      </Card>
+    );
+  }
 
-    return () => clearInterval(interval);
-  }, []);
+  const { casualties } = conflictData;
 
   const getTrendColor = (trend: string) => {
     switch (trend) {
-      case 'increasing': return 'error';
-      case 'stable': return 'warning';
-      case 'decreasing': return 'success';
+      case THREAT_TRENDS.INCREASING: return 'error';
+      case THREAT_TRENDS.STABLE: return 'warning';
+      case THREAT_TRENDS.DECREASING: return 'success';
       default: return 'default';
     }
   };
 
-  const totalCasualties = data.reduce((sum, item) => sum + item.casualties, 0);
-  const totalInjured = data.reduce((sum, item) => sum + item.injured, 0);
+  // Calculate trends based on data updates
+  const getTrend = (country: 'israel' | 'iran'): string => {
+    // In a real app, we'd compare with historical data
+    // For now, base it on recent update time
+    const lastUpdate = casualties[country].lastUpdate;
+    if (lastUpdate.includes('Just now') || lastUpdate.includes('min')) {
+      return THREAT_TRENDS.INCREASING;
+    }
+    return THREAT_TRENDS.STABLE;
+  };
+
+  const totalCasualties = casualties.israel.deaths + casualties.iran.deaths;
+  const totalInjured = casualties.israel.injured + casualties.iran.injured;
+
+  const data = [
+    {
+      country: 'Israel',
+      flag: '🇮🇱',
+      casualties: casualties.israel.deaths,
+      injured: casualties.israel.injured,
+      lastUpdate: casualties.israel.lastUpdate,
+      trend: getTrend('israel'),
+    },
+    {
+      country: 'Iran',
+      flag: '🇮🇷',
+      casualties: casualties.iran.deaths,
+      injured: casualties.iran.injured,
+      lastUpdate: casualties.iran.lastUpdate,
+      trend: getTrend('iran'),
+    },
+  ];
 
   return (
     <Card sx={{ height: '100%' }}>
@@ -102,7 +105,7 @@ const CasualtyCounter: React.FC = () => {
         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
           <Box sx={{ flex: 1, textAlign: 'center', p: 2, backgroundColor: '#2a1010', borderRadius: 1 }}>
             <Typography variant="h4" sx={{ color: '#f44336', fontWeight: 700 }}>
-              {totalCasualties}
+              {totalCasualties.toLocaleString()}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Total Casualties
@@ -110,7 +113,7 @@ const CasualtyCounter: React.FC = () => {
           </Box>
           <Box sx={{ flex: 1, textAlign: 'center', p: 2, backgroundColor: '#2a1a10', borderRadius: 1 }}>
             <Typography variant="h4" sx={{ color: '#ff9800', fontWeight: 700 }}>
-              {totalInjured}
+              {totalInjured.toLocaleString()}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Total Injured
@@ -142,7 +145,7 @@ const CasualtyCounter: React.FC = () => {
                 <PersonIcon sx={{ mr: 1, fontSize: 16, color: '#f44336' }} />
                 <Box>
                   <Typography variant="h6" sx={{ color: '#f44336', fontWeight: 600 }}>
-                    {item.casualties}
+                    {item.casualties.toLocaleString()}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Casualties
@@ -153,7 +156,7 @@ const CasualtyCounter: React.FC = () => {
                 <HospitalIcon sx={{ mr: 1, fontSize: 16, color: '#ff9800' }} />
                 <Box>
                   <Typography variant="h6" sx={{ color: '#ff9800', fontWeight: 600 }}>
-                    {item.injured}
+                    {item.injured.toLocaleString()}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     Injured
