@@ -23,6 +23,8 @@ import ConflictTimeline from './ConflictTimeline';
 import ThreatLevelIndicator from './ThreatLevelIndicator';
 import AlertModal from './AlertModal';
 import DemandTracker from './DemandTracker';
+import ConflictMap from './ConflictMap';
+import DataSourceIndicator from './DataSourceIndicator';
 
 const Dashboard: React.FC = () => {
   const [alertCount, setAlertCount] = useState(3);
@@ -82,8 +84,11 @@ const Dashboard: React.FC = () => {
             <ConflictTimeline />
           </Box>
 
-          {/* Bottom Row - Demands */}
-          <DemandTracker />
+          {/* Map and Demands Row */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
+            <ConflictMap />
+            <DemandTracker />
+          </Box>
         </Box>
       </Container>
 
@@ -122,6 +127,9 @@ const Dashboard: React.FC = () => {
         alertCount={alertCount}
         onAlertCountChange={setAlertCount}
       />
+
+      {/* Data Source Indicator */}
+      <DataSourceIndicator />
     </Box>
   );
 };

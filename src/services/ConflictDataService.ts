@@ -1,3 +1,7 @@
+import newsService from './NewsService';
+import governmentSourcesService from './GovernmentSourcesService';
+import osintService from './OSINTService';
+
 export interface ConflictData {
   casualties: {
     israel: { deaths: number; injured: number; lastUpdate: string };
@@ -177,15 +181,18 @@ class ConflictDataService {
   }
 
   private startRealTimeUpdates() {
-    // Simulate real-time data updates
+    // Initial fetch
+    this.fetchLatestData();
+
+    // Fetch real data every 60 seconds
+    setInterval(() => {
+      this.fetchLatestData();
+    }, 60000); // Update every minute
+
+    // Quick updates for simulated data between API calls
     setInterval(() => {
       this.updateData();
     }, 30000); // Update every 30 seconds
-
-    // Faster updates for casualties
-    setInterval(() => {
-      this.updateCasualties();
-    }, 10000); // Update every 10 seconds
   }
 
   private updateData() {
@@ -246,12 +253,198 @@ class ConflictDataService {
     return { ...this.data };
   }
 
-  // Simulate fetching from external APIs
+  // Fetch real data from external APIs
   public async fetchLatestData(): Promise<ConflictData> {
-    // In a real implementation, this would call actual news APIs
-    // For now, we simulate API delay and return current data
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    return this.getCurrentData();
+    try {
+      // Fetch from multiple sources in parallel
+      const [newsArticles, governmentData, osintData] = await Promise.all([
+        newsService.fetchConflictNews(),
+        governmentSourcesService.fetchAllGovernmentSources(),
+        osintService.gatherIntelligence()
+      ]);
+
+      // Process news articles for casualties and events
+      if (newsArticles.length > 0) {
+        this.processNewsArticles(newsArticles);
+      }
+
+      // Update facility status from government sources
+      if (governmentData.length > 0) {
+        this.processGovernmentData(governmentData);
+      }
+
+      // Update threat level from OSINT
+      if (osintData.explosions.length > 0 || osintData.events.length > 0) {
+        this.processOSINTData(osintData);
+      }
+
+      this.data.lastGlobalUpdate = new Date().toISOString();
+      this.notifySubscribers();
+      
+      return this.getCurrentData();
+    } catch (error) {
+      console.error('Error fetching latest data:', error);
+      // Return current data as fallback
+      return this.getCurrentData();
+    }
+  }
+
+  private processNewsArticles(articles: any[]) {
+    // Extract casualties from recent articles
+    const recentArticles = articles.slice(0, 10); // Process latest 10 articles
+    
+    for (const article of recentArticles) {
+      const text = article.title + ' ' + article.description;
+      
+      // Extract casualties
+      const casualties = newsService.extractCasualties(text);
+      if (casualties.killed || casualties.injured) {
+        // Determine which country based on context
+        const isIsrael = text.toLowerCase().includes('israel') || 
+                        text.toLowerCase().includes('tel aviv');
+        const isIran = text.toLowerCase().includes('iran') || 
+                      text.toLowerCase().includes('tehran');
+        
+        if (isIsrael && casualties.killed) {
+          this.data.casualties.israel.deaths = casualties.killed;
+          this.data.casualties.israel.injured = casualties.injured || this.data.casualties.israel.injured;
+          this.data.casualties.israel.lastUpdate = this.getTimeAgo(new Date(article.publishedAt));
+        } else if (isIran && casualties.killed) {
+          this.data.casualties.iran.deaths = casualties.killed;
+          this.data.casualties.iran.injured = casualties.injured || this.data.casualties.iran.injured;
+          this.data.casualties.iran.lastUpdate = this.getTimeAgo(new Date(article.publishedAt));
+        }
+      }
+      
+      // Create timeline events from articles
+      const severity = newsService.analyzeSeverity(article);
+      const locations = newsService.extractLocations(text);
+      
+      if (locations.length > 0) {
+        const event: TimelineEvent = {
+          id: article.url,
+          timestamp: new Date(article.publishedAt),
+          title: article.title,
+          description: article.description,
+          location: locations[0],
+          type: this.categorizeEventType(text),
+          severity: severity,
+          source: article.source.name
+        };
+        
+        // Add to timeline if not already present
+        if (!this.data.timeline.find(e => e.id === event.id)) {
+          this.data.timeline.unshift(event);
+          this.data.timeline = this.data.timeline.slice(0, 20); // Keep latest 20
+        }
+      }
+      
+      // Create alerts for critical news
+      if (severity === 'critical' || severity === 'high') {
+        const alert: Alert = {
+          id: `alert-${article.url}`,
+          timestamp: new Date(article.publishedAt),
+          title: article.title.substring(0, 100),
+          description: article.description,
+          severity: severity,
+          type: this.categorizeAlertType(text),
+          read: false
+        };
+        
+        if (!this.data.alerts.find(a => a.id === alert.id)) {
+          this.data.alerts.unshift(alert);
+          this.data.alerts = this.data.alerts.slice(0, 10); // Keep latest 10
+        }
+      }
+    }
+  }
+
+  private processGovernmentData(data: any[]) {
+    // Update facility status from IAEA reports
+    for (const report of data) {
+      if (report.facilities) {
+        for (const facilityName of report.facilities) {
+          const facility = this.data.facilities.find(f => 
+            f.name.toLowerCase().includes(facilityName.toLowerCase())
+          );
+          if (facility) {
+            // Update facility based on report
+            if (report.title.toLowerCase().includes('damage')) {
+              facility.status = 'damaged';
+            } else if (report.title.toLowerCase().includes('operational')) {
+              facility.status = 'operational';
+            }
+            facility.lastStrike = this.getTimeAgo(new Date(report.date));
+          }
+        }
+      }
+    }
+  }
+
+  private processOSINTData(data: any) {
+    // Update threat level based on activity
+    if (data.explosions.length > 5) {
+      this.data.threatLevel.globalLevel = 5;
+    } else if (data.explosions.length > 2) {
+      this.data.threatLevel.globalLevel = 4;
+    }
+    
+    // Update regional threat based on events
+    if (data.events) {
+      for (const event of data.events) {
+        const region = this.getRegionFromLocation(event.location);
+        if (region) {
+          const regionData = this.data.threatLevel.regions.find(r => r.name === region);
+          if (regionData && event.fatalities > 0) {
+            regionData.trend = 'increasing';
+            regionData.level = Math.min(5, regionData.level + 1);
+          }
+        }
+      }
+    }
+  }
+
+  private categorizeEventType(text: string): TimelineEvent['type'] {
+    const lower = text.toLowerCase();
+    if (lower.includes('missile') || lower.includes('rocket')) return 'missile';
+    if (lower.includes('strike') || lower.includes('attack')) return 'strike';
+    if (lower.includes('diplomatic') || lower.includes('talks')) return 'diplomacy';
+    if (lower.includes('evacuate')) return 'evacuation';
+    if (lower.includes('casualt') || lower.includes('killed')) return 'casualty';
+    return 'strike';
+  }
+
+  private categorizeAlertType(text: string): Alert['type'] {
+    const lower = text.toLowerCase();
+    if (lower.includes('missile') || lower.includes('rocket')) return 'missile';
+    if (lower.includes('strike') || lower.includes('attack')) return 'strike';
+    if (lower.includes('diplomatic') || lower.includes('talks')) return 'diplomatic';
+    if (lower.includes('nuclear') || lower.includes('facility')) return 'nuclear';
+    if (lower.includes('casualt') || lower.includes('killed')) return 'casualty';
+    return 'strike';
+  }
+
+  private getRegionFromLocation(location: string): string | null {
+    if (location.includes('Israel') || location.includes('Tel Aviv')) return 'Middle East';
+    if (location.includes('Iran') || location.includes('Tehran')) return 'Persian Gulf';
+    if (location.includes('Mediterranean')) return 'Mediterranean';
+    if (location.includes('Red Sea')) return 'Red Sea';
+    return null;
+  }
+
+  private getTimeAgo(date: Date): string {
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins} min ago`;
+    
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
   }
 }
 

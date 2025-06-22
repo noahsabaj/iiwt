@@ -60,6 +60,15 @@ npm run build
 ## 🌐 Deployment
 
 ### Option 1: Vercel (Recommended)
+
+#### Environment Variables Setup
+1. Go to your Vercel project settings
+2. Navigate to "Environment Variables"
+3. Add the following:
+   - `REACT_APP_NEWS_API_KEY` - Your NewsAPI.org key
+   - `REACT_APP_NEWS_API_URL` - https://newsapi.org/v2
+
+#### Deploy Command
 ```bash
 # Install Vercel CLI
 npm i -g vercel
