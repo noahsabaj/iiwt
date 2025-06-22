@@ -27,6 +27,9 @@ import ConflictMap from './ConflictMap';
 import DataSourceIndicator from './DataSourceIndicator';
 import MilitaryOperationsTracker from './MilitaryOperationsTracker';
 import WeaponsTracker from './WeaponsTracker';
+import EconomicImpactDashboard from './EconomicImpactDashboard';
+import RegionalAlliesMonitor from './RegionalAlliesMonitor';
+import SourceCodeViewer from './SourceCodeViewer';
 
 const Dashboard: React.FC = () => {
   const [alertCount, setAlertCount] = useState(3);
@@ -96,6 +99,17 @@ const Dashboard: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
             <MilitaryOperationsTracker />
             <WeaponsTracker />
+          </Box>
+
+          {/* Economic Impact Row */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3 }}>
+            <EconomicImpactDashboard />
+            <RegionalAlliesMonitor />
+          </Box>
+
+          {/* Source Code & Transparency Row */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 3 }}>
+            <SourceCodeViewer />
           </Box>
         </Box>
       </Container>
