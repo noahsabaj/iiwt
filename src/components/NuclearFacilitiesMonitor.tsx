@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import { useConflictData } from '../contexts/ConflictDataContext';
 import { FACILITY_STATUS, RADIATION_RISK } from '../constants';
+import { Facility } from '../types';
 
 const NuclearFacilitiesMonitor: React.FC = () => {
   const { data: conflictData } = useConflictData();
@@ -78,13 +79,13 @@ const NuclearFacilitiesMonitor: React.FC = () => {
     }
   };
 
-  const operationalCount = facilities.filter(f => f.status === FACILITY_STATUS.OPERATIONAL).length;
-  const damagedCount = facilities.filter(f => f.status === FACILITY_STATUS.DAMAGED).length;
-  const evacuatedCount = facilities.filter(f => f.status === FACILITY_STATUS.EVACUATED).length;
-  const offlineCount = facilities.filter(f => f.status === FACILITY_STATUS.OFFLINE).length;
+  const operationalCount = facilities.filter((f: Facility) => f.status === FACILITY_STATUS.OPERATIONAL).length;
+  const damagedCount = facilities.filter((f: Facility) => f.status === FACILITY_STATUS.DAMAGED).length;
+  const evacuatedCount = facilities.filter((f: Facility) => f.status === FACILITY_STATUS.EVACUATED).length;
+  const offlineCount = facilities.filter((f: Facility) => f.status === FACILITY_STATUS.OFFLINE).length;
 
   // Find facilities with radiation risk
-  const facilitiesWithRadiation = facilities.filter(f => 
+  const facilitiesWithRadiation = facilities.filter((f: Facility) => 
     f.radiationRisk !== RADIATION_RISK.NONE
   );
 
@@ -138,7 +139,7 @@ const NuclearFacilitiesMonitor: React.FC = () => {
 
         {/* Facilities List */}
         <List dense>
-          {facilities.map((facility, index) => (
+          {facilities.map((facility: Facility, index: number) => (
             <ListItem 
               key={facility.id} 
               sx={{ 
@@ -170,12 +171,14 @@ const NuclearFacilitiesMonitor: React.FC = () => {
                       📍 {facility.location}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, mt: 0.5, alignItems: 'center' }}>
-                      <Chip
-                        label={`Severity: ${facility.severity}`}
-                        color={getSeverityColor(facility.severity)}
+                      {facility.severity && (
+                        <Chip
+                          label={`Severity: ${facility.severity}`}
+                        color={getSeverityColor(facility.severity || 'low')}
                         size="small"
                         sx={{ fontSize: '0.6rem', height: 18 }}
                       />
+                      )}
                       <Chip
                         label={`Radiation: ${facility.radiationRisk}`}
                         color={getRadiationColor(facility.radiationRisk)}

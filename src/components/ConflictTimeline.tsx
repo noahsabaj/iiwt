@@ -28,9 +28,16 @@ import {
   LocalFireDepartment as ExplosionIcon,
   Flight as MissileIcon,
   Warning as WarningIcon,
+  RadioButtonChecked as NuclearIcon,
+  Shield as CyberIcon,
+  Visibility as IntelligenceIcon,
+  Groups as DiplomacyIcon,
+  DirectionsRun as EvacuationIcon,
 } from '@mui/icons-material';
 import { useConflictData } from '../contexts/ConflictDataContext';
 import { EVENT_TYPES } from '../constants';
+import EventConfidenceIndicator from './EventConfidenceIndicator';
+import { TimelineEvent } from '../types';
 
 const ConflictTimeline: React.FC = () => {
   const { data: conflictData } = useConflictData();
@@ -51,7 +58,7 @@ const ConflictTimeline: React.FC = () => {
 
   const events = conflictData.timeline || [];
 
-  const filteredEvents = events.filter(event =>
+  const filteredEvents = events.filter((event: TimelineEvent) =>
     event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     event.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
     event.location.toLowerCase().includes(searchTerm.toLowerCase())
@@ -61,9 +68,13 @@ const ConflictTimeline: React.FC = () => {
     switch (type) {
       case EVENT_TYPES.STRIKE: return <ExplosionIcon />;
       case EVENT_TYPES.MISSILE: return <MissileIcon />;
-      case EVENT_TYPES.DIPLOMACY: return <ScheduleIcon />;
-      case EVENT_TYPES.EVACUATION: return <WarningIcon />;
+      case EVENT_TYPES.DIPLOMACY: return <DiplomacyIcon />;
+      case EVENT_TYPES.EVACUATION: return <EvacuationIcon />;
       case EVENT_TYPES.CASUALTY: return <WarningIcon />;
+      case EVENT_TYPES.NUCLEAR: return <NuclearIcon />;
+      case EVENT_TYPES.CYBER: return <CyberIcon />;
+      case EVENT_TYPES.ALERT: return <WarningIcon />;
+      case EVENT_TYPES.INTELLIGENCE: return <IntelligenceIcon />;
       default: return <LocationIcon />;
     }
   };
@@ -78,9 +89,9 @@ const ConflictTimeline: React.FC = () => {
     }
   };
 
-  const getTimeAgo = (timestamp: Date): string => {
+  const getTimeAgo = (timestamp: Date | string): string => {
     const now = new Date();
-    const eventDate = new Date(timestamp);
+    const eventDate = timestamp instanceof Date ? timestamp : new Date(timestamp);
     const diffMs = now.getTime() - eventDate.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     const diffHours = Math.floor(diffMinutes / 60);
@@ -138,7 +149,7 @@ const ConflictTimeline: React.FC = () => {
         ) : (
           <Box sx={{ maxHeight: '500px', overflowY: 'auto' }}>
             <Timeline>
-              {filteredEvents.map((event, index) => (
+              {filteredEvents.map((event: TimelineEvent, index: number) => (
                 <TimelineItem key={event.id}>
                   <TimelineSeparator>
                     <TimelineDot color={getEventColor(event.severity)}>
@@ -175,18 +186,67 @@ const ConflictTimeline: React.FC = () => {
                               📍 {event.location} • {getTimeAgo(event.timestamp)}
                             </Typography>
                           </Box>
+                          
+                          {/* Confidence and Source Tracking */}
+                          {(event.confidence !== undefined || event.metadata?.sources) && (
+                            <Box sx={{ mt: 1 }}>
+                              <EventConfidenceIndicator
+                                confidence={event.confidence || event.metadata?.confidence || 0.5}
+                                sources={event.metadata?.sources || [event.source || 'Unknown']}
+                                verified={(event.metadata?.sources?.length || 0) > 1}
+                              />
+                            </Box>
+                          )}
                         </Box>
                       </AccordionSummary>
                       <AccordionDetails sx={{ px: 0, pt: 0 }}>
                         <Typography variant="body2" color="text.secondary" paragraph>
                           {event.description}
                         </Typography>
+                        
+                        {/* Extended Metadata */}
+                        {event.metadata && (
+                          <Box sx={{ mt: 2, mb: 2 }}>
+                            {event.metadata.eventTime && (
+                              <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
+                                <strong>Actual Event Time:</strong> {new Date(event.metadata.eventTime).toLocaleString()}
+                                {event.metadata.timeConfidence && (
+                                  <Chip 
+                                    label={`${Math.round(event.metadata.timeConfidence * 100)}% confident`}
+                                    size="small"
+                                    sx={{ ml: 1, height: 16, fontSize: '0.7rem' }}
+                                  />
+                                )}
+                              </Typography>
+                            )}
+                            
+                            {event.metadata.duplicateCount && (
+                              <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
+                                <strong>Similar Reports:</strong> {event.metadata.duplicateCount} other sources
+                              </Typography>
+                            )}
+                            
+                            {event.metadata.url && (
+                              <Typography variant="caption" display="block">
+                                <a 
+                                  href={event.metadata.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  style={{ color: '#2196f3' }}
+                                >
+                                  View Original Article →
+                                </a>
+                              </Typography>
+                            )}
+                          </Box>
+                        )}
+                        
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <Typography variant="caption" color="text.secondary">
-                            Source: {event.source}
+                            Primary Source: {event.source || event.metadata?.source || 'Unknown'}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {new Date(event.timestamp).toLocaleString()}
+                            Published: {new Date(event.timestamp).toLocaleString()}
                           </Typography>
                         </Box>
                       </AccordionDetails>

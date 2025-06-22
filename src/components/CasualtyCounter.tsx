@@ -43,37 +43,53 @@ const CasualtyCounter: React.FC = () => {
   };
 
   // Calculate trends based on data updates
-  const getTrend = (country: 'israel' | 'iran'): string => {
+  const getTrend = (lastUpdate?: string): string => {
     // In a real app, we'd compare with historical data
     // For now, base it on recent update time
-    const lastUpdate = casualties[country].lastUpdate;
-    if (lastUpdate.includes('Just now') || lastUpdate.includes('min')) {
+    if (lastUpdate && (lastUpdate.includes('Just now') || lastUpdate.includes('min'))) {
       return THREAT_TRENDS.INCREASING;
     }
     return THREAT_TRENDS.STABLE;
   };
 
-  const totalCasualties = casualties.israel.deaths + casualties.iran.deaths;
-  const totalInjured = casualties.israel.injured + casualties.iran.injured;
-
-  const data = [
-    {
-      country: 'Israel',
-      flag: '🇮🇱',
-      casualties: casualties.israel.deaths,
-      injured: casualties.israel.injured,
-      lastUpdate: casualties.israel.lastUpdate,
-      trend: getTrend('israel'),
-    },
-    {
-      country: 'Iran',
-      flag: '🇮🇷',
-      casualties: casualties.iran.deaths,
-      injured: casualties.iran.injured,
-      lastUpdate: casualties.iran.lastUpdate,
-      trend: getTrend('iran'),
-    },
+  // Build data array for all parties with casualties
+  const parties = [
+    { key: 'israel', name: 'Israel', flag: '🇮🇱' },
+    { key: 'iran', name: 'Iran', flag: '🇮🇷' },
+    { key: 'usa', name: 'USA', flag: '🇺🇸' },
+    { key: 'houthis', name: 'Houthis', flag: '🇾🇪' },
+    { key: 'hezbollah', name: 'Hezbollah', flag: '🇱🇧' },
+    { key: 'syria', name: 'Syria', flag: '🇸🇾' },
+    { key: 'iraq', name: 'Iraq', flag: '🇮🇶' },
+    { key: 'other', name: 'Other', flag: '🏳️' },
   ];
+
+  const data = parties
+    .filter(party => casualties[party.key as keyof typeof casualties])
+    .map(party => {
+      const partyCasualties = casualties[party.key as keyof typeof casualties];
+      if (!partyCasualties || typeof partyCasualties === 'string') return null;
+      
+      return {
+        country: party.name,
+        flag: party.flag,
+        casualties: partyCasualties.deaths || 0,
+        injured: partyCasualties.injured || 0,
+        lastUpdate: partyCasualties.lastUpdate,
+        trend: getTrend(partyCasualties.lastUpdate),
+      };
+    })
+    .filter(Boolean) as Array<{
+      country: string;
+      flag: string;
+      casualties: number;
+      injured: number;
+      lastUpdate?: string;
+      trend: string;
+    }>;
+
+  const totalCasualties = data.reduce((sum, item) => sum + item.casualties, 0);
+  const totalInjured = data.reduce((sum, item) => sum + item.injured, 0);
 
   return (
     <Card sx={{ height: '100%' }}>

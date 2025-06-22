@@ -25,6 +25,8 @@ import AlertModal from './AlertModal';
 import DemandTracker from './DemandTracker';
 import ConflictMap from './ConflictMap';
 import DataSourceIndicator from './DataSourceIndicator';
+import MilitaryOperationsTracker from './MilitaryOperationsTracker';
+import WeaponsTracker from './WeaponsTracker';
 
 const Dashboard: React.FC = () => {
   const [alertCount, setAlertCount] = useState(3);
@@ -75,7 +77,7 @@ const Dashboard: React.FC = () => {
           {/* Top Row - Main Stats */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
             <CasualtyCounter />
-            <NuclearFacilitiesMonitor />
+            <ConflictMap />
           </Box>
 
           {/* Middle Row - Threat & Timeline */}
@@ -84,10 +86,16 @@ const Dashboard: React.FC = () => {
             <ConflictTimeline />
           </Box>
 
-          {/* Map and Demands Row */}
+          {/* Nuclear Facilities and Demands Row */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
-            <ConflictMap />
+            <NuclearFacilitiesMonitor />
             <DemandTracker />
+          </Box>
+
+          {/* Military Operations Row */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
+            <MilitaryOperationsTracker />
+            <WeaponsTracker />
           </Box>
         </Box>
       </Container>

@@ -24,6 +24,7 @@ import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Polyline } from '
 import L from 'leaflet';
 import { useConflictData } from '../contexts/ConflictDataContext';
 import { NUCLEAR_FACILITIES, MAP_DEFAULTS } from '../constants';
+import { TimelineEvent, Facility } from '../types';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
@@ -72,7 +73,7 @@ const ConflictMap: React.FC = () => {
     const locations: any[] = [];
     
     // Add recent events from timeline
-    conflictData.timeline.slice(0, 10).forEach((event, index) => {
+    conflictData.timeline.slice(0, 10).forEach((event: TimelineEvent, index: number) => {
       // Try to match event location to known coordinates
       const location = event.location.toLowerCase();
       let coords: [number, number] | null = null;
@@ -187,8 +188,8 @@ const ConflictMap: React.FC = () => {
             />
             
             {/* Nuclear Facilities */}
-            {conflictData && conflictData.facilities.map((facility) => {
-              const facilityInfo = Object.values(NUCLEAR_FACILITIES).find(f => f.name === facility.name);
+            {conflictData && conflictData.facilities.map((facility: Facility) => {
+              const facilityInfo = Object.values(NUCLEAR_FACILITIES).find((f: any) => f.name === facility.name);
               if (!facilityInfo) return null;
               
               return (
@@ -229,7 +230,7 @@ const ConflictMap: React.FC = () => {
             })}
             
             {/* Event Locations (Strikes, etc.) */}
-            {eventLocations.map((location) => (
+            {eventLocations.map((location: any) => (
               <CircleMarker
                 key={location.id}
                 center={location.coordinates}

@@ -20,6 +20,9 @@ export const ALERT_TYPES = {
   CASUALTY: 'casualty',
   DIPLOMATIC: 'diplomatic',
   NUCLEAR: 'nuclear',
+  CYBER: 'cyber',
+  EVACUATION: 'evacuation',
+  MILITARY: 'military',
 } as const;
 
 export type AlertType = typeof ALERT_TYPES[keyof typeof ALERT_TYPES];
@@ -31,6 +34,11 @@ export const EVENT_TYPES = {
   DIPLOMACY: 'diplomacy',
   EVACUATION: 'evacuation',
   CASUALTY: 'casualty',
+  NUCLEAR: 'nuclear',
+  CYBER: 'cyber',
+  ALERT: 'alert',
+  INTELLIGENCE: 'intelligence',
+  OTHER: 'other',
 } as const;
 
 export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
@@ -39,6 +47,7 @@ export type EventType = typeof EVENT_TYPES[keyof typeof EVENT_TYPES];
 export const FACILITY_STATUS = {
   OPERATIONAL: 'operational',
   DAMAGED: 'damaged',
+  DESTROYED: 'destroyed',
   EVACUATED: 'evacuated',
   OFFLINE: 'offline',
 } as const;
@@ -51,6 +60,7 @@ export const RADIATION_RISK = {
   LOW: 'low',
   MODERATE: 'moderate',
   HIGH: 'high',
+  CRITICAL: 'critical',
 } as const;
 
 export type RadiationRisk = typeof RADIATION_RISK[keyof typeof RADIATION_RISK];

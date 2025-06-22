@@ -1,14 +1,6 @@
-interface NewsArticle {
-  title: string;
-  description: string;
-  url: string;
-  publishedAt: string;
-  source: {
-    id: string | null;
-    name: string;
-  };
-  content: string;
-}
+import { NewsAPIOptimizer } from './newsAPIOptimizer';
+import { VerificationService } from './verificationService';
+import { NewsArticle } from '../types';
 
 interface NewsResponse {
   status: string;
@@ -21,6 +13,18 @@ class NewsService {
   private baseUrl = process.env.NODE_ENV === 'development' 
     ? '/api/news' 
     : (process.env.REACT_APP_NEWS_API_URL || 'https://newsapi.org/v2');
+  
+  private newsOptimizer: NewsAPIOptimizer;
+  private verificationService: VerificationService;
+  private articleCache: Map<string, NewsArticle[]>;
+  private cacheExpiry: Map<string, number>;
+
+  constructor() {
+    this.newsOptimizer = new NewsAPIOptimizer(this.apiKey || '');
+    this.verificationService = new VerificationService();
+    this.articleCache = new Map();
+    this.cacheExpiry = new Map();
+  }
 
   // Keywords to track the conflict
   private conflictKeywords = [
@@ -36,19 +40,34 @@ class NewsService {
   ];
 
   async fetchConflictNews(): Promise<NewsArticle[]> {
+    // Check cache first
+    const cacheKey = 'conflict_news';
+    if (this.isCacheValid(cacheKey)) {
+      return this.articleCache.get(cacheKey) || [];
+    }
+
     try {
-      // Use both endpoints for comprehensive coverage
-      const [topHeadlines, everything] = await Promise.all([
-        this.fetchTopHeadlines(),
-        this.fetchEverything()
+      // Use optimized fetching for both breaking and historical news
+      const [breakingNews, historicalNews, topHeadlines] = await Promise.all([
+        this.newsOptimizer.fetchBreakingNews(),
+        this.newsOptimizer.fetchHistoricalData(24), // Last 24 hours
+        this.fetchTopHeadlines() // Keep existing method for compatibility
       ]);
       
       // Combine and deduplicate
-      const allArticles = [...topHeadlines, ...everything];
-      return this.deduplicateArticles(allArticles);
+      const allArticles = this.deduplicateArticles([
+        ...breakingNews, 
+        ...historicalNews, 
+        ...topHeadlines
+      ]);
+      
+      // Cache results
+      this.cacheArticles(cacheKey, allArticles, 5); // 5 minute cache
+      
+      return allArticles;
     } catch (error) {
       console.error('Error fetching conflict news:', error);
-      return [];
+      return this.articleCache.get(cacheKey) || []; // Return cached data if available
     }
   }
 
@@ -130,80 +149,198 @@ class NewsService {
   }
 
   private deduplicateArticles(articles: NewsArticle[]): NewsArticle[] {
-    const seen = new Set<string>();
-    return articles.filter(article => {
-      const key = article.title + article.source.name;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    const seen = new Map<string, NewsArticle>();
+    
+    for (const article of articles) {
+      const key = article.url || article.title;
+      if (!seen.has(key)) {
+        seen.set(key, article);
+      }
+    }
+    
+    return Array.from(seen.values());
   }
 
-  // Extract casualty numbers from news text using NLP patterns
-  extractCasualties(text: string): { killed?: number; injured?: number } {
-    const result: { killed?: number; injured?: number } = {};
+  // Enhanced casualty extraction with verification
+  extractCasualties(text: string): { killed?: number; injured?: number; confidence?: number } {
+    const casualties: { killed?: number; injured?: number; confidence?: number } = {};
+    let confidence = 0.5; // Base confidence
     
-    // Patterns for casualties
+    // Look for killed/dead
     const killedPatterns = [
-      /(\d+)\s*(?:people\s*)?killed/i,
-      /(\d+)\s*dead/i,
-      /death toll.*?(\d+)/i,
-      /(\d+)\s*casualties/i
+      { pattern: /(\d+)\s*(?:people\s*)?killed/i, confidence: 0.9 },
+      { pattern: /(\d+)\s*dead/i, confidence: 0.85 },
+      { pattern: /death\s*toll\s*(?:rises?\s*to\s*)?(\d+)/i, confidence: 0.8 },
+      { pattern: /(\d+)\s*fatalities/i, confidence: 0.85 }
     ];
     
+    for (const { pattern, confidence: patternConfidence } of killedPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        casualties.killed = parseInt(match[1] || match[2]);
+        confidence = Math.max(confidence, patternConfidence);
+        break;
+      }
+    }
+    
+    // Look for injured/wounded
     const injuredPatterns = [
-      /(\d+)\s*(?:people\s*)?injured/i,
-      /(\d+)\s*wounded/i,
-      /(\d+)\s*hurt/i
+      { pattern: /(\d+)\s*(?:people\s*)?injured/i, confidence: 0.9 },
+      { pattern: /(\d+)\s*wounded/i, confidence: 0.85 },
+      { pattern: /(\d+)\s*hurt/i, confidence: 0.7 },
+      { pattern: /(\d+)\s*hospitalized/i, confidence: 0.8 }
     ];
-
-    for (const pattern of killedPatterns) {
+    
+    for (const { pattern, confidence: patternConfidence } of injuredPatterns) {
       const match = text.match(pattern);
-      if (match && match[1]) {
-        result.killed = parseInt(match[1]);
+      if (match) {
+        casualties.injured = parseInt(match[1]);
+        confidence = Math.max(confidence, patternConfidence);
         break;
       }
     }
-
-    for (const pattern of injuredPatterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) {
-        result.injured = parseInt(match[1]);
-        break;
-      }
-    }
-
-    return result;
+    
+    casualties.confidence = confidence;
+    return casualties;
   }
 
-  // Extract location mentions
+  // Enhanced location extraction with geocoding hints
   extractLocations(text: string): string[] {
-    const locations = [
-      'Tehran', 'Tel Aviv', 'Jerusalem', 'Haifa',
-      'Natanz', 'Arak', 'Bushehr', 'Fordow',
-      'Damascus', 'Beirut', 'Gaza'
+    const locations: Array<{ name: string; confidence: number; type: string }> = [];
+    const processedLocations = new Set<string>();
+    
+    // Pattern-based extraction
+    const locationPattern = /(?:in|at|near|outside|around)\s+([A-Z][a-zA-Z\s]+?)(?:\.|,|;|\s+on)/g;
+    
+    let match;
+    while ((match = locationPattern.exec(text)) !== null) {
+      const location = match[1].trim();
+      if (!processedLocations.has(location)) {
+        locations.push({ name: location, confidence: 0.7, type: 'extracted' });
+        processedLocations.add(location);
+      }
+    }
+    
+    // Known locations with types
+    const knownLocations = [
+      // Israeli cities
+      { name: 'Tel Aviv', type: 'city_israel', confidence: 0.95 },
+      { name: 'Jerusalem', type: 'city_israel', confidence: 0.95 },
+      { name: 'Haifa', type: 'city_israel', confidence: 0.95 },
+      { name: 'Gaza', type: 'territory', confidence: 0.9 },
+      
+      // Iranian cities and facilities
+      { name: 'Tehran', type: 'city_iran', confidence: 0.95 },
+      { name: 'Isfahan', type: 'city_iran', confidence: 0.9 },
+      { name: 'Natanz', type: 'nuclear_facility', confidence: 0.98 },
+      { name: 'Arak', type: 'nuclear_facility', confidence: 0.98 },
+      { name: 'Bushehr', type: 'nuclear_facility', confidence: 0.98 },
+      { name: 'Fordow', type: 'nuclear_facility', confidence: 0.98 },
+      
+      // Regional
+      { name: 'Damascus', type: 'city_syria', confidence: 0.9 },
+      { name: 'Beirut', type: 'city_lebanon', confidence: 0.9 },
+      { name: 'Baghdad', type: 'city_iraq', confidence: 0.9 }
     ];
-
-    return locations.filter(loc => 
-      text.toLowerCase().includes(loc.toLowerCase())
-    );
+    
+    for (const location of knownLocations) {
+      if (text.includes(location.name) && !processedLocations.has(location.name)) {
+        locations.push(location);
+        processedLocations.add(location.name);
+      }
+    }
+    
+    // Return just the names for backward compatibility
+    return locations
+      .sort((a, b) => b.confidence - a.confidence)
+      .map(loc => loc.name);
   }
 
-  // Analyze sentiment/severity
-  analyzeSeverity(article: NewsArticle): 'critical' | 'high' | 'medium' | 'low' {
-    const text = (article.title + ' ' + article.description).toLowerCase();
+  // Enhanced severity analysis with multiple factors
+  analyzeSeverity(article: NewsArticle): 'low' | 'medium' | 'high' | 'critical' {
+    const text = (article.title + ' ' + (article.description || '')).toLowerCase();
+    let severityScore = 0;
     
-    const criticalWords = ['nuclear', 'killed', 'strike', 'bomb', 'explosion'];
-    const highWords = ['missile', 'attack', 'wounded', 'damage', 'destroyed'];
-    const mediumWords = ['threat', 'warning', 'tension', 'alert'];
-
-    const criticalCount = criticalWords.filter(w => text.includes(w)).length;
-    const highCount = highWords.filter(w => text.includes(w)).length;
+    // Critical indicators (score: 10)
+    const criticalTerms = [
+      'nuclear leak', 'radiation', 'mass casualties', 'chemical weapons',
+      'nuclear facility hit', 'reactor damage'
+    ];
+    if (criticalTerms.some(term => text.includes(term))) {
+      return 'critical';
+    }
     
-    if (criticalCount >= 2) return 'critical';
-    if (criticalCount >= 1 || highCount >= 2) return 'high';
-    if (highCount >= 1) return 'medium';
+    // High severity indicators (score: 5-8)
+    const highTerms = {
+      'killed': 8,
+      'missile strike': 7,
+      'air strike': 7,
+      'nuclear facility': 6,
+      'ballistic missile': 7,
+      'death toll': 8,
+      'fatalities': 7
+    };
+    
+    for (const [term, score] of Object.entries(highTerms)) {
+      if (text.includes(term)) {
+        severityScore = Math.max(severityScore, score);
+      }
+    }
+    
+    // Medium severity indicators (score: 3-4)
+    const mediumTerms = {
+      'injured': 4,
+      'wounded': 4,
+      'damage': 3,
+      'alert': 3,
+      'intercepted': 3,
+      'evacuated': 4
+    };
+    
+    for (const [term, score] of Object.entries(mediumTerms)) {
+      if (text.includes(term)) {
+        severityScore = Math.max(severityScore, score);
+      }
+    }
+    
+    // Check casualty numbers
+    const casualties = this.extractCasualties(text);
+    if (casualties.killed && casualties.killed > 50) return 'critical';
+    if (casualties.killed && casualties.killed > 10) severityScore = Math.max(severityScore, 7);
+    if (casualties.injured && casualties.injured > 100) severityScore = Math.max(severityScore, 6);
+    
+    // Map score to severity
+    if (severityScore >= 7) return 'high';
+    if (severityScore >= 3) return 'medium';
     return 'low';
+  }
+
+  // Fetch articles related to military operations
+  async fetchOperationNews(): Promise<NewsArticle[]> {
+    const operations = [
+      'Operation Rising Lion',
+      'Operation True Promise',
+      'Operation Swords of Iron',
+      'Operation Breaking Dawn'
+    ];
+    
+    return this.newsOptimizer.fetchOperationNews(operations);
+  }
+
+  // Get verification service instance
+  getVerificationService(): VerificationService {
+    return this.verificationService;
+  }
+
+  // Private helper methods
+  private isCacheValid(key: string): boolean {
+    const expiry = this.cacheExpiry.get(key);
+    return expiry ? Date.now() < expiry : false;
+  }
+
+  private cacheArticles(key: string, articles: NewsArticle[], minutesToLive: number): void {
+    this.articleCache.set(key, articles);
+    this.cacheExpiry.set(key, Date.now() + minutesToLive * 60 * 1000);
   }
 }
 

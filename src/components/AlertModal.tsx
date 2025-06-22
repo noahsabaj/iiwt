@@ -26,10 +26,12 @@ import {
   VolumeUp as VolumeUpIcon,
   VolumeOff as VolumeOffIcon,
   AccessTime as TimeIcon,
+  LocationOn as LocationIcon,
 } from '@mui/icons-material';
 import { useConflictData } from '../contexts/ConflictDataContext';
-import { Alert } from '../services/ConflictDataService';
+import { Alert } from '../types';
 import { SEVERITY_COLORS } from '../constants';
+import EventConfidenceIndicator from './EventConfidenceIndicator';
 
 interface AlertModalProps {
   open: boolean;
@@ -50,7 +52,7 @@ const AlertModal: React.FC<AlertModalProps> = ({ open, onClose, alertCount, onAl
       setLocalAlerts(conflictData.alerts);
       
       // Play sound for new alerts
-      const currentAlertCount = conflictData.alerts.filter(a => !a.read).length;
+      const currentAlertCount = conflictData.alerts.filter((a: Alert) => !a.read).length;
       if (soundEnabled && currentAlertCount > previousAlertCount) {
         console.log('🔊 New alert sound');
       }
@@ -96,9 +98,10 @@ const AlertModal: React.FC<AlertModalProps> = ({ open, onClose, alertCount, onAl
     setLocalAlerts(prev => prev.map(alert => ({ ...alert, read: true })));
   };
 
-  const getTimeAgo = (timestamp: Date): string => {
+  const getTimeAgo = (timestamp: Date | string): string => {
     const now = new Date();
-    const diffMs = now.getTime() - timestamp.getTime();
+    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    const diffMs = now.getTime() - date.getTime();
     const diffMinutes = Math.floor(diffMs / (1000 * 60));
     
     if (diffMinutes < 1) return 'Just now';
@@ -136,7 +139,7 @@ const AlertModal: React.FC<AlertModalProps> = ({ open, onClose, alertCount, onAl
       }}
     >
       <DialogTitle sx={{ display: 'flex', alignItems: 'center', pb: 1 }}>
-        <Badge badgeContent={localAlerts.filter(a => !a.read).length} color="error">
+        <Badge badgeContent={localAlerts.filter((a: Alert) => !a.read).length} color="error">
           <NotificationsIcon sx={{ mr: 2, color: '#ff5722' }} />
         </Badge>
         <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 600 }}>
@@ -160,7 +163,7 @@ const AlertModal: React.FC<AlertModalProps> = ({ open, onClose, alertCount, onAl
           size="small"
           color="warning"
           sx={{ mr: 1 }}
-          disabled={localAlerts.filter(a => !a.read).length === 0}
+          disabled={localAlerts.filter((a: Alert) => !a.read).length === 0}
         >
           Mark All Read
         </Button>
@@ -241,12 +244,33 @@ const AlertModal: React.FC<AlertModalProps> = ({ open, onClose, alertCount, onAl
                         >
                           {alert.description}
                         </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
-                          <TimeIcon sx={{ fontSize: 12, mr: 0.5, color: 'text.secondary' }} />
-                          <Typography variant="caption" color="text.secondary">
-                            {getTimeAgo(alert.timestamp)}
-                          </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5, flexWrap: 'wrap' }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                            <TimeIcon sx={{ fontSize: 12, mr: 0.5, color: 'text.secondary' }} />
+                            <Typography variant="caption" color="text.secondary">
+                              {getTimeAgo(alert.timestamp)}
+                            </Typography>
+                          </Box>
+                          {alert.location && (
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <LocationIcon sx={{ fontSize: 12, mr: 0.5, color: 'text.secondary' }} />
+                              <Typography variant="caption" color="text.secondary">
+                                {alert.location}
+                              </Typography>
+                            </Box>
+                          )}
                         </Box>
+                        
+                        {/* Confidence Indicator for alerts derived from news */}
+                        {(alert as any).metadata && (
+                          <Box sx={{ mt: 1 }}>
+                            <EventConfidenceIndicator
+                              confidence={(alert as any).metadata.confidence || 0.7}
+                              sources={(alert as any).metadata.sources || [(alert as any).source || 'Breaking News']}
+                              verified={(alert as any).metadata.verified || false}
+                            />
+                          </Box>
+                        )}
                       </Box>
                     }
                   />

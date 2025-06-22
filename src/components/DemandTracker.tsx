@@ -61,7 +61,19 @@ const DemandTracker: React.FC = () => {
     }
   };
 
-  const { demands } = data;
+  const demands = data.demands;
+
+  if (!demands) {
+    return (
+      <Card sx={{ height: '100%' }}>
+        <CardContent>
+          <Typography variant="body2" color="text.secondary">
+            No demand data available
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card sx={{ height: '100%' }}>
@@ -105,7 +117,7 @@ const DemandTracker: React.FC = () => {
               Primary Conditions:
             </Typography>
             <List dense sx={{ mb: 2 }}>
-              {demands.israel.demands.map((demand, index) => (
+              {demands.israel.demands.map((demand: string, index: number) => (
                 <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
                   <ListItemIcon sx={{ minWidth: 32 }}>
                     <FlagIcon sx={{ fontSize: 16, color: '#ff5722' }} />
@@ -125,7 +137,7 @@ const DemandTracker: React.FC = () => {
               Red Lines:
             </Typography>
             <List dense>
-              {demands.israel.redLines.map((redLine, index) => (
+              {demands.israel.redLines.map((redLine: string, index: number) => (
                 <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
                   <ListItemIcon sx={{ minWidth: 32 }}>
                     <WarningIcon sx={{ fontSize: 16, color: '#d32f2f' }} />
@@ -161,7 +173,7 @@ const DemandTracker: React.FC = () => {
               Primary Conditions:
             </Typography>
             <List dense sx={{ mb: 2 }}>
-              {demands.iran.demands.map((demand, index) => (
+              {demands.iran.demands.map((demand: string, index: number) => (
                 <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
                   <ListItemIcon sx={{ minWidth: 32 }}>
                     <FlagIcon sx={{ fontSize: 16, color: '#ff5722' }} />
@@ -181,7 +193,7 @@ const DemandTracker: React.FC = () => {
               Red Lines:
             </Typography>
             <List dense>
-              {demands.iran.redLines.map((redLine, index) => (
+              {demands.iran.redLines.map((redLine: string, index: number) => (
                 <ListItem key={index} sx={{ px: 0, py: 0.5 }}>
                   <ListItemIcon sx={{ minWidth: 32 }}>
                     <WarningIcon sx={{ fontSize: 16, color: '#d32f2f' }} />

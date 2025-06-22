@@ -17,7 +17,8 @@ import {
   Remove as StableIcon,
 } from '@mui/icons-material';
 import { useConflictData } from '../contexts/ConflictDataContext';
-import { THREAT_LEVELS, THREAT_TRENDS } from '../constants';
+import { THREAT_LEVELS, THREAT_TRENDS, FACILITY_STATUS } from '../constants';
+import { Facility } from '../types';
 
 interface ThreatLevelConfig {
   level: number;
@@ -72,8 +73,8 @@ const ThreatLevelIndicator: React.FC = () => {
   };
 
   // Determine if nuclear facilities are under threat
-  const facilitiesUnderThreat = conflictData.facilities.filter(f => 
-    f.status === 'damaged' || f.status === 'evacuated'
+  const facilitiesUnderThreat = conflictData.facilities.filter((f: Facility) => 
+    f.status === FACILITY_STATUS.DAMAGED || f.status === FACILITY_STATUS.EVACUATED
   ).length > 0;
 
   return (
@@ -162,7 +163,7 @@ const ThreatLevelIndicator: React.FC = () => {
           REGIONAL THREAT LEVELS
         </Typography>
 
-        {threatLevel.regions.map((region, index) => (
+        {threatLevel.regions.map((region: any, index: number) => (
           <Box
             key={region.name}
             sx={{

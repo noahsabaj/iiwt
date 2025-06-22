@@ -1,61 +1,35 @@
 import newsService from './NewsService';
 import governmentSourcesService from './GovernmentSourcesService';
 import osintService from './OSINTService';
+import { EventProcessor } from './eventProcessor';
+import { deduplicateTimelineEvents } from './deduplication';
+import { VerificationService } from './verificationService';
+import { NLPService } from './nlpService';
+import { 
+  ConflictData, 
+  TimelineEvent, 
+  Alert, 
+  Facility as NuclearFacility, 
+  ThreatAssessment, 
+  DemandData,
+  NewsArticle,
+  Casualties 
+} from '../types';
+import { 
+  FACILITY_STATUS, 
+  RADIATION_RISK, 
+  SEVERITY_LEVELS, 
+  ALERT_TYPES, 
+  EVENT_TYPES, 
+  THREAT_LEVELS, 
+  THREAT_TRENDS, 
+  DIPLOMATIC_STATUS, 
+  UPDATE_INTERVALS 
+} from '../constants';
 
-export interface ConflictData {
-  casualties: {
-    israel: { deaths: number; injured: number; lastUpdate: string };
-    iran: { deaths: number; injured: number; lastUpdate: string };
-  };
-  facilities: NuclearFacility[];
-  alerts: Alert[];
-  threatLevel: ThreatAssessment;
-  timeline: TimelineEvent[];
-  demands: DemandTracker;
-  lastGlobalUpdate: string;
-}
-
-export interface NuclearFacility {
-  id: string;
-  name: string;
-  location: string;
-  status: 'operational' | 'damaged' | 'evacuated' | 'offline';
-  lastStrike: string;
-  severity: 'low' | 'moderate' | 'high' | 'critical';
-  radiationRisk: 'none' | 'low' | 'moderate' | 'high';
-}
-
-export interface Alert {
-  id: string;
-  timestamp: Date;
-  title: string;
-  description: string;
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  type: 'missile' | 'strike' | 'casualty' | 'diplomatic' | 'nuclear';
-  read: boolean;
-}
-
-export interface ThreatAssessment {
-  globalLevel: 1 | 2 | 3 | 4 | 5;
-  regions: {
-    name: string;
-    level: number;
-    trend: 'increasing' | 'stable' | 'decreasing';
-  }[];
-}
-
-export interface TimelineEvent {
-  id: string;
-  timestamp: Date;
-  title: string;
-  description: string;
-  location: string;
-  type: 'strike' | 'missile' | 'diplomacy' | 'evacuation' | 'casualty';
-  severity: 'low' | 'medium' | 'high' | 'critical';
-  source: string;
-}
-
-export interface DemandTracker {
+// Type definitions moved to ../types.ts
+// Using type aliases for compatibility
+type DemandTracker = {
   israel: {
     demands: string[];
     redLines: string[];
@@ -67,18 +41,31 @@ export interface DemandTracker {
     lastUpdate: string;
   };
   diplomaticStatus: 'active' | 'stalled' | 'suspended' | 'none';
+};
+
+// Extend ConflictData to include DemandTracker
+interface ExtendedConflictData extends ConflictData {
+  demands: DemandTracker;
+  lastGlobalUpdate: string;
 }
 
 class ConflictDataService {
-  private data: ConflictData;
-  private subscribers: ((data: ConflictData) => void)[] = [];
+  private data: ExtendedConflictData;
+  private subscribers: ((data: ExtendedConflictData) => void)[] = [];
+  private eventProcessor: EventProcessor;
+  private verificationService: VerificationService;
+  private nlpService: NLPService;
+  private allArticles: NewsArticle[] = [];
 
   constructor() {
     this.data = this.getInitialData();
+    this.eventProcessor = new EventProcessor();
+    this.verificationService = new VerificationService();
+    this.nlpService = new NLPService();
     this.startRealTimeUpdates();
   }
 
-  private getInitialData(): ConflictData {
+  private getInitialData(): ExtendedConflictData {
     return {
       casualties: {
         israel: { deaths: 24, injured: 685, lastUpdate: '2 min ago' },
@@ -89,48 +76,50 @@ class ConflictDataService {
           id: '1',
           name: 'Arak Heavy Water Reactor',
           location: 'Arak, Iran',
-          status: 'evacuated',
+          status: FACILITY_STATUS.EVACUATED,
           lastStrike: '6 hours ago',
-          severity: 'high',
-          radiationRisk: 'none',
+          severity: SEVERITY_LEVELS.HIGH,
+          radiationRisk: RADIATION_RISK.NONE,
         },
         {
           id: '2',
           name: 'Natanz Nuclear Facility',
           location: 'Natanz, Iran',
-          status: 'damaged',
+          status: FACILITY_STATUS.DAMAGED,
           lastStrike: '2 days ago',
-          severity: 'critical',
-          radiationRisk: 'moderate',
+          severity: SEVERITY_LEVELS.CRITICAL,
+          radiationRisk: RADIATION_RISK.MODERATE,
         },
         {
           id: '3',
           name: 'Bushehr Nuclear Plant',
           location: 'Bushehr, Iran',
-          status: 'operational',
+          status: FACILITY_STATUS.OPERATIONAL,
           lastStrike: 'Never',
-          severity: 'low',
-          radiationRisk: 'none',
+          severity: SEVERITY_LEVELS.LOW,
+          radiationRisk: RADIATION_RISK.NONE,
         },
         {
           id: '4',
           name: 'Fordow Fuel Enrichment',
           location: 'Qom, Iran',
-          status: 'offline',
+          status: FACILITY_STATUS.OFFLINE,
           lastStrike: '1 day ago',
-          severity: 'high',
-          radiationRisk: 'low',
+          severity: SEVERITY_LEVELS.HIGH,
+          radiationRisk: RADIATION_RISK.LOW,
         },
       ],
       alerts: [],
       threatLevel: {
-        globalLevel: 4,
+        globalLevel: THREAT_LEVELS.HIGH,
         regions: [
-          { name: 'Middle East', level: 5, trend: 'increasing' },
-          { name: 'Mediterranean', level: 3, trend: 'stable' },
-          { name: 'Persian Gulf', level: 4, trend: 'increasing' },
-          { name: 'Red Sea', level: 3, trend: 'increasing' },
+          { name: 'Middle East', level: THREAT_LEVELS.CRITICAL, trend: THREAT_TRENDS.INCREASING },
+          { name: 'Mediterranean', level: THREAT_LEVELS.MODERATE, trend: THREAT_TRENDS.STABLE },
+          { name: 'Persian Gulf', level: THREAT_LEVELS.HIGH, trend: THREAT_TRENDS.INCREASING },
+          { name: 'Red Sea', level: THREAT_LEVELS.MODERATE, trend: THREAT_TRENDS.INCREASING },
         ],
+        nuclearThreat: true,
+        lastAssessment: new Date().toISOString(),
       },
       timeline: [
         {
@@ -139,8 +128,8 @@ class ConflictDataService {
           title: 'US Strikes Iranian Nuclear Sites',
           description: 'United States launches offensive strikes on three Iranian nuclear facilities.',
           location: 'Multiple locations, Iran',
-          type: 'strike',
-          severity: 'critical',
+          type: EVENT_TYPES.STRIKE,
+          severity: SEVERITY_LEVELS.CRITICAL,
           source: 'CNN'
         },
         // Add more timeline events...
@@ -174,9 +163,11 @@ class ConflictDataService {
           ],
           lastUpdate: '2 hours ago',
         },
-        diplomaticStatus: 'suspended',
+        diplomaticStatus: DIPLOMATIC_STATUS.SUSPENDED,
       },
       lastGlobalUpdate: new Date().toISOString(),
+      lastUpdate: new Date().toISOString(),
+      dataSource: 'demo' as const,
     };
   }
 
@@ -219,19 +210,19 @@ class ConflictDataService {
     // Simulate casualty updates
     if (Math.random() > 0.85) {
       if (Math.random() > 0.5) {
-        this.data.casualties.israel.deaths += Math.random() > 0.7 ? 1 : 0;
-        this.data.casualties.israel.injured += Math.floor(Math.random() * 3);
+        this.data.casualties.israel.deaths = (this.data.casualties.israel.deaths || 0) + (Math.random() > 0.7 ? 1 : 0);
+        this.data.casualties.israel.injured = (this.data.casualties.israel.injured || 0) + Math.floor(Math.random() * 3);
         this.data.casualties.israel.lastUpdate = 'Just now';
       } else {
-        this.data.casualties.iran.deaths += Math.random() > 0.8 ? Math.floor(Math.random() * 2) : 0;
-        this.data.casualties.iran.injured += Math.floor(Math.random() * 5);
+        this.data.casualties.iran.deaths = (this.data.casualties.iran.deaths || 0) + (Math.random() > 0.8 ? Math.floor(Math.random() * 2) : 0);
+        this.data.casualties.iran.injured = (this.data.casualties.iran.injured || 0) + Math.floor(Math.random() * 5);
         this.data.casualties.iran.lastUpdate = 'Just now';
       }
       this.notifySubscribers();
     }
   }
 
-  public subscribe(callback: (data: ConflictData) => void) {
+  public subscribe(callback: (data: ExtendedConflictData) => void) {
     this.subscribers.push(callback);
     // Immediately call with current data
     callback(this.data);
@@ -249,12 +240,12 @@ class ConflictDataService {
     this.subscribers.forEach(callback => callback(this.data));
   }
 
-  public getCurrentData(): ConflictData {
+  public getCurrentData(): ExtendedConflictData {
     return { ...this.data };
   }
 
   // Fetch real data from external APIs
-  public async fetchLatestData(): Promise<ConflictData> {
+  public async fetchLatestData(): Promise<ExtendedConflictData> {
     try {
       // Fetch from multiple sources in parallel
       const [newsArticles, governmentData, osintData] = await Promise.all([
@@ -290,71 +281,103 @@ class ConflictDataService {
   }
 
   private processNewsArticles(articles: any[]) {
-    // Extract casualties from recent articles
-    const recentArticles = articles.slice(0, 10); // Process latest 10 articles
+    // Store articles for verification
+    this.allArticles = [...articles, ...this.allArticles].slice(0, 200); // Keep last 200 articles
     
+    // Use EventProcessor for accurate timeline event extraction
+    const processedEvents = this.eventProcessor.processNewsArticles(articles);
+    
+    // Verify events using VerificationService
+    const verificationResults = this.verificationService.verifyEventBatch(processedEvents, this.allArticles);
+    
+    // Convert processed events to local TimelineEvent format with verification data
+    const newEvents = processedEvents.map(event => {
+      const verification = verificationResults.get(event.id);
+      return {
+        id: event.id,
+        timestamp: new Date(event.timestamp),
+        title: event.title,
+        description: event.description,
+        location: event.location,
+        type: this.mapEventType(event.type),
+        severity: event.severity,
+        source: event.metadata?.source || 'Unknown',
+        confidence: event.confidence,
+        metadata: {
+          ...event.metadata,
+          verified: verification?.verified || false,
+          verificationConfidence: verification?.confidence || event.confidence,
+          sources: verification?.sources || event.metadata?.sources || []
+        }
+      };
+    });
+    
+    // Merge with existing timeline, avoiding duplicates
+    const existingIds = new Set(this.data.timeline.map(e => e.id));
+    const uniqueNewEvents = newEvents.filter(e => !existingIds.has(e.id));
+    
+    // Add new events and sort by actual event time
+    this.data.timeline = [...uniqueNewEvents, ...this.data.timeline]
+      .sort((a, b) => {
+        const timeA = typeof a.timestamp === 'string' ? new Date(a.timestamp).getTime() : a.timestamp.getTime();
+        const timeB = typeof b.timestamp === 'string' ? new Date(b.timestamp).getTime() : b.timestamp.getTime();
+        return timeB - timeA;
+      })
+      .slice(0, 50); // Keep latest 50 events
+    
+    // Extract casualties from articles using enhanced NLP
+    const recentArticles = articles.slice(0, 10);
     for (const article of recentArticles) {
-      const text = article.title + ' ' + article.description;
+      // Use NLP service to extract casualties with party information
+      const nlpResults = this.nlpService.analyzeArticle(article);
+      const casualties = nlpResults.entities.casualties;
       
-      // Extract casualties
-      const casualties = newsService.extractCasualties(text);
-      if (casualties.killed || casualties.injured) {
-        // Determine which country based on context
-        const isIsrael = text.toLowerCase().includes('israel') || 
-                        text.toLowerCase().includes('tel aviv');
-        const isIran = text.toLowerCase().includes('iran') || 
-                      text.toLowerCase().includes('tehran');
-        
-        if (isIsrael && casualties.killed) {
-          this.data.casualties.israel.deaths = casualties.killed;
-          this.data.casualties.israel.injured = casualties.injured || this.data.casualties.israel.injured;
-          this.data.casualties.israel.lastUpdate = this.getTimeAgo(new Date(article.publishedAt));
-        } else if (isIran && casualties.killed) {
-          this.data.casualties.iran.deaths = casualties.killed;
-          this.data.casualties.iran.injured = casualties.injured || this.data.casualties.iran.injured;
-          this.data.casualties.iran.lastUpdate = this.getTimeAgo(new Date(article.publishedAt));
+      for (const casualty of casualties) {
+        if (casualty.party) {
+          const partyKey = casualty.party as keyof Casualties;
+          
+          // Initialize party casualties if not exists
+          if (!this.data.casualties[partyKey] && partyKey !== 'lastUpdate') {
+            this.data.casualties[partyKey] = { injured: 0 };
+          }
+          
+          const partyCasualties = this.data.casualties[partyKey];
+          if (partyCasualties && typeof partyCasualties !== 'string') {
+            if (casualty.type === 'killed') {
+              partyCasualties.deaths = (partyCasualties.deaths || 0) + casualty.count;
+            } else if (casualty.type === 'injured' || casualty.type === 'wounded') {
+              partyCasualties.injured = (partyCasualties.injured || 0) + casualty.count;
+            } else if (casualty.type === 'casualties') {
+              // Split casualties between killed and injured (rough estimate)
+              partyCasualties.deaths = (partyCasualties.deaths || 0) + Math.floor(casualty.count * 0.3);
+              partyCasualties.injured = (partyCasualties.injured || 0) + Math.floor(casualty.count * 0.7);
+            }
+            partyCasualties.lastUpdate = this.getTimeAgo(new Date(article.publishedAt));
+          }
         }
       }
+    }
+    
+    // Create alerts for high-confidence critical events
+    const criticalEvents = processedEvents.filter(e => 
+      (e.severity === 'critical' || e.severity === 'high') && 
+      (e.confidence || 0) > 0.7
+    );
+    
+    for (const event of criticalEvents) {
+      const alert: Alert = {
+        id: `alert-${event.id}`,
+        timestamp: new Date(event.timestamp),
+        title: event.title.substring(0, 100),
+        description: event.description,
+        severity: event.severity,
+        type: this.mapAlertType(event.type),
+        read: false
+      };
       
-      // Create timeline events from articles
-      const severity = newsService.analyzeSeverity(article);
-      const locations = newsService.extractLocations(text);
-      
-      if (locations.length > 0) {
-        const event: TimelineEvent = {
-          id: article.url,
-          timestamp: new Date(article.publishedAt),
-          title: article.title,
-          description: article.description,
-          location: locations[0],
-          type: this.categorizeEventType(text),
-          severity: severity,
-          source: article.source.name
-        };
-        
-        // Add to timeline if not already present
-        if (!this.data.timeline.find(e => e.id === event.id)) {
-          this.data.timeline.unshift(event);
-          this.data.timeline = this.data.timeline.slice(0, 20); // Keep latest 20
-        }
-      }
-      
-      // Create alerts for critical news
-      if (severity === 'critical' || severity === 'high') {
-        const alert: Alert = {
-          id: `alert-${article.url}`,
-          timestamp: new Date(article.publishedAt),
-          title: article.title.substring(0, 100),
-          description: article.description,
-          severity: severity,
-          type: this.categorizeAlertType(text),
-          read: false
-        };
-        
-        if (!this.data.alerts.find(a => a.id === alert.id)) {
-          this.data.alerts.unshift(alert);
-          this.data.alerts = this.data.alerts.slice(0, 10); // Keep latest 10
-        }
+      if (!this.data.alerts.find(a => a.id === alert.id)) {
+        this.data.alerts.unshift(alert);
+        this.data.alerts = this.data.alerts.slice(0, 15); // Keep latest 15
       }
     }
   }
@@ -404,24 +427,31 @@ class ConflictDataService {
     }
   }
 
-  private categorizeEventType(text: string): TimelineEvent['type'] {
-    const lower = text.toLowerCase();
-    if (lower.includes('missile') || lower.includes('rocket')) return 'missile';
-    if (lower.includes('strike') || lower.includes('attack')) return 'strike';
-    if (lower.includes('diplomatic') || lower.includes('talks')) return 'diplomacy';
-    if (lower.includes('evacuate')) return 'evacuation';
-    if (lower.includes('casualt') || lower.includes('killed')) return 'casualty';
-    return 'strike';
+  private mapEventType(type: string): TimelineEvent['type'] {
+    const typeMap: { [key: string]: TimelineEvent['type'] } = {
+      'missile': 'missile',
+      'strike': 'strike',
+      'diplomatic': 'diplomacy',
+      'evacuation': 'evacuation',
+      'alert': 'strike',
+      'nuclear': 'strike',
+      'cyber': 'strike',
+      'intelligence': 'strike'
+    };
+    return typeMap[type] || 'strike';
   }
 
-  private categorizeAlertType(text: string): Alert['type'] {
-    const lower = text.toLowerCase();
-    if (lower.includes('missile') || lower.includes('rocket')) return 'missile';
-    if (lower.includes('strike') || lower.includes('attack')) return 'strike';
-    if (lower.includes('diplomatic') || lower.includes('talks')) return 'diplomatic';
-    if (lower.includes('nuclear') || lower.includes('facility')) return 'nuclear';
-    if (lower.includes('casualt') || lower.includes('killed')) return 'casualty';
-    return 'strike';
+  private mapAlertType(type: string): Alert['type'] {
+    const alertMap: { [key: string]: Alert['type'] } = {
+      'missile': 'missile',
+      'strike': 'strike',
+      'diplomatic': 'diplomatic',
+      'nuclear': 'nuclear',
+      'alert': 'missile',
+      'cyber': 'strike',
+      'intelligence': 'strike'
+    };
+    return alertMap[type] || 'strike';
   }
 
   private getRegionFromLocation(location: string): string | null {

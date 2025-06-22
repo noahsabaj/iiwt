@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { ConflictData, conflictDataService } from '../services/ConflictDataService';
+import { ConflictData } from '../types';
+import { conflictDataService } from '../services/ConflictDataService';
 
 interface ConflictDataContextType {
   data: ConflictData | null;
