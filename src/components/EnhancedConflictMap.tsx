@@ -5,27 +5,19 @@ import {
   Typography,
   Box,
   Chip,
-  IconButton,
   Tooltip,
   ToggleButtonGroup,
   ToggleButton,
   Switch,
   FormControlLabel,
-  Slider,
   Paper,
 } from '@mui/material';
 import {
   Map as MapIcon,
   Layers as LayersIcon,
   MyLocation as LocationIcon,
-  Fullscreen as FullscreenIcon,
-  Timeline as TimelineIcon,
   LocalFireDepartment as FireIcon,
   GpsFixed as TargetIcon,
-  Visibility as VisibilityIcon,
-  PlayArrow as PlayIcon,
-  Pause as PauseIcon,
-  Speed as SpeedIcon,
 } from '@mui/icons-material';
 import { MapContainer, TileLayer, Marker, Popup, CircleMarker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
@@ -208,12 +200,8 @@ const EnhancedConflictMap: React.FC = () => {
   const { data: conflictData } = useConflictData();
   const [mapLayer, setMapLayer] = useState<'satellite' | 'terrain' | 'dark'>('satellite');
   const [selectedLocation, setSelectedLocation] = useState<any>(null);
-  const [showTrajectories, setShowTrajectories] = useState(true);
   const [showHeatMap, setShowHeatMap] = useState(true);
-  const [animationSpeed, setAnimationSpeed] = useState(1);
-  const [isPlaying, setIsPlaying] = useState(true);
   const [osintData, setOsintData] = useState<any>(null);
-  const [activeTrajectories, setActiveTrajectories] = useState<AnimatedTrajectoryProps[]>([]);
 
   // Fetch OSINT data for hotspots
   useEffect(() => {
@@ -226,43 +214,60 @@ const EnhancedConflictMap: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Simulate active trajectories
-  useEffect(() => {
-    if (!isPlaying) return;
-
-    const interval = setInterval(() => {
-      // Random missile launch simulation
-      if (Math.random() > 0.7) {
-        const origins = [
-          [35.6892, 51.3890], // Tehran
-          [32.0853, 34.7818], // Tel Aviv
-          [33.5138, 36.2765], // Damascus
-          [33.8938, 35.5018], // Beirut
-        ];
-        const targets = [...origins];
+  // Get active missile/drone events from timeline for trajectory display
+  const getActiveTrajectories = (): AnimatedTrajectoryProps[] => {
+    if (!conflictData) return [];
+    
+    const trajectories: AnimatedTrajectoryProps[] = [];
+    const now = new Date().getTime();
+    
+    // Look for recent missile/drone events in the timeline
+    conflictData.timeline.slice(0, 10).forEach((event) => {
+      const eventAge = now - new Date(event.timestamp).getTime();
+      const isRecent = eventAge < 3600000; // Within last hour
+      
+      // Check if event mentions missile or drone strike
+      const lowerTitle = event.title.toLowerCase();
+      const lowerDesc = (event.description || '').toLowerCase();
+      const text = lowerTitle + ' ' + lowerDesc;
+      
+      if (isRecent && (text.includes('missile') || text.includes('drone') || text.includes('rocket'))) {
+        // Try to determine origin and target from event description
+        // This is simplified - in production would use NLP
+        let origin: [number, number] | null = null;
+        let target: [number, number] | null = null;
         
-        const origin = origins[Math.floor(Math.random() * origins.length)];
-        const target = targets.filter(t => t !== origin)[Math.floor(Math.random() * (targets.length - 1))];
-
-        const newTrajectory: AnimatedTrajectoryProps = {
-          start: origin as [number, number],
-          end: target as [number, number],
-          duration: 10000 / animationSpeed,
-          type: Math.random() > 0.5 ? 'missile' : 'drone',
-          color: Math.random() > 0.5 ? '#ff5722' : '#ff9800',
-        };
-
-        setActiveTrajectories(prev => [...prev, newTrajectory]);
-
-        // Remove trajectory after animation completes
-        setTimeout(() => {
-          setActiveTrajectories(prev => prev.filter(t => t !== newTrajectory));
-        }, newTrajectory.duration + 2000);
+        if (text.includes('from iran') || text.includes('iranian')) {
+          origin = [35.6892, 51.3890]; // Tehran
+        } else if (text.includes('from lebanon') || text.includes('hezbollah')) {
+          origin = [33.8938, 35.5018]; // Beirut
+        }
+        
+        if (text.includes('tel aviv')) {
+          target = [32.0853, 34.7818];
+        } else if (text.includes('jerusalem')) {
+          target = [31.7683, 35.2137];
+        } else if (event.location) {
+          // Use event location as target
+          const loc = event.location.toLowerCase();
+          if (loc.includes('natanz')) target = [33.7222, 51.9161];
+          else if (loc.includes('isfahan')) target = [32.6546, 51.6680];
+        }
+        
+        if (origin && target) {
+          trajectories.push({
+            start: origin,
+            end: target,
+            duration: 15000, // 15 seconds for visibility
+            type: text.includes('drone') ? 'drone' : 'missile',
+            color: event.severity === 'critical' ? '#d32f2f' : '#ff5722'
+          });
+        }
       }
-    }, 5000 / animationSpeed);
-
-    return () => clearInterval(interval);
-  }, [isPlaying, animationSpeed]);
+    });
+    
+    return trajectories;
+  };
 
   // Get dynamic locations from conflict data
   const getEventLocations = () => {
@@ -316,34 +321,24 @@ const EnhancedConflictMap: React.FC = () => {
   return (
     <Card sx={{ height: '100%', minHeight: 600 }}>
       <CardContent sx={{ p: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
-        {/* Enhanced Map Header */}
+        {/* Map Header */}
         <Box sx={{ p: 2, borderBottom: '1px solid #333', backgroundColor: '#0a0a0a' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               <MapIcon sx={{ mr: 1, color: '#ff9800' }} />
               <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                ENHANCED CONFLICT MAP
+                CONFLICT MAP
               </Typography>
-              {isPlaying && (
-                <Chip
-                  label="LIVE"
-                  size="small"
-                  color="error"
-                  sx={{ ml: 2, animation: 'pulse 2s infinite' }}
-                />
-              )}
+              <Chip
+                label="LIVE"
+                size="small"
+                color="error"
+                sx={{ ml: 2, animation: 'pulse 2s infinite' }}
+              />
             </Box>
             
-            {/* Enhanced Map Controls */}
+            {/* Map Controls */}
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <IconButton 
-                onClick={() => setIsPlaying(!isPlaying)} 
-                size="small"
-                sx={{ color: isPlaying ? '#4caf50' : '#ff5722' }}
-              >
-                {isPlaying ? <PauseIcon /> : <PlayIcon />}
-              </IconButton>
-              
               <ToggleButtonGroup
                 value={mapLayer}
                 exclusive
@@ -369,19 +364,8 @@ const EnhancedConflictMap: React.FC = () => {
             </Box>
           </Box>
 
-          {/* Enhanced Controls */}
+          {/* Map Controls */}
           <Box sx={{ display: 'flex', gap: 2, mt: 2, alignItems: 'center' }}>
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={showTrajectories}
-                  onChange={(e) => setShowTrajectories(e.target.checked)}
-                  size="small"
-                />
-              }
-              label="Trajectories"
-              sx={{ '& .MuiTypography-root': { fontSize: '0.875rem' } }}
-            />
             <FormControlLabel
               control={
                 <Switch
@@ -390,25 +374,15 @@ const EnhancedConflictMap: React.FC = () => {
                   size="small"
                 />
               }
-              label="Heat Map"
+              label="Conflict Heat Map"
               sx={{ '& .MuiTypography-root': { fontSize: '0.875rem' } }}
             />
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <SpeedIcon sx={{ fontSize: 20 }} />
-              <Slider
-                value={animationSpeed}
-                onChange={(e, value) => setAnimationSpeed(value as number)}
-                min={0.5}
-                max={3}
-                step={0.5}
-                sx={{ width: 100 }}
-                size="small"
-              />
-              <Typography variant="caption">{animationSpeed}x</Typography>
-            </Box>
+            <Typography variant="caption" color="text.secondary">
+              Showing events from last 24 hours
+            </Typography>
           </Box>
 
-          {/* Enhanced Legend */}
+          {/* Legend */}
           <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
             <Chip 
               icon={<TargetIcon sx={{ color: '#ff9800' }} />} 
@@ -438,7 +412,7 @@ const EnhancedConflictMap: React.FC = () => {
           </Box>
         </Box>
 
-        {/* Enhanced Map Container */}
+        {/* Map Container */}
         <Box sx={{ flex: 1, position: 'relative' }}>
           <MapContainer
             center={MAP_DEFAULTS.CENTER}
@@ -575,13 +549,13 @@ const EnhancedConflictMap: React.FC = () => {
               </Popup>
             </Marker>
             
-            {/* Animated Trajectories */}
-            {showTrajectories && activeTrajectories.map((trajectory, index) => (
+            {/* Show trajectories for actual missile/drone events */}
+            {getActiveTrajectories().map((trajectory, index) => (
               <AnimatedTrajectory key={`trajectory-${index}`} {...trajectory} />
             ))}
           </MapContainer>
 
-          {/* Real-time Activity Indicator */}
+          {/* Event Counter */}
           <Paper sx={{ 
             position: 'absolute', 
             top: 10, 
@@ -590,13 +564,13 @@ const EnhancedConflictMap: React.FC = () => {
             backgroundColor: 'rgba(0, 0, 0, 0.8)',
             zIndex: 1000,
           }}>
-            <Typography variant="caption" sx={{ color: '#4caf50' }}>
-              Active Trajectories: {activeTrajectories.length}
+            <Typography variant="caption" sx={{ color: '#ff9800' }}>
+              Active Events: {eventLocations.filter(e => e.isActive).length}
             </Typography>
           </Paper>
         </Box>
 
-        {/* Enhanced Selected Location Details */}
+        {/* Selected Location Details */}
         {selectedLocation && (
           <Box sx={{ p: 2, borderTop: '1px solid #333', backgroundColor: '#0a0a0a' }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
