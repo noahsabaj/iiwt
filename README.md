@@ -13,8 +13,14 @@ A real-time conflict monitoring dashboard built with React and Material UI to tr
 ### Advanced Features
 - **Live Alerts System**: Real-time notifications with severity levels and sound alerts
 - **Peace Demands Tracker**: Current demands and red lines from both sides
-- **Diplomatic Status Monitor**: Track peace process and negotiation status
-- **Auto-Refresh Data**: Simulated real-time updates every 10-30 seconds
+- **Military Operations Tracker**: Monitor ongoing operations like "Rising Lion" and "True Promise"
+- **Weapons Systems Monitor**: Track missile types, interception rates, and air defense effectiveness
+- **Economic Impact Dashboard**: Oil prices, shipping routes, and market volatility
+- **Regional Allies Monitor**: Track involvement of Hezbollah, US forces, and regional actors
+- **OSINT Dashboard**: Real-time intelligence from GDELT, ACLED, and social media
+- **Enhanced Conflict Map**: Beautiful animated trajectories, heat maps, and live updates
+- **Source Code Transparency**: Built-in GitHub repository viewer
+- **Auto-Refresh Data**: Real-time updates from multiple sources
 
 ### User Experience
 - **Dark Crisis Theme**: Military-style dark interface with red accent colors
@@ -41,14 +47,27 @@ A real-time conflict monitoring dashboard built with React and Material UI to tr
 ### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/noahsabaj/iiwt.git
+cd iiwt
+
 # Install dependencies
 npm install
 
-# Start development server
+# Start in demo mode (no API keys required)
 npm start
 ```
 
 The application will open at `http://localhost:3000`
+
+### Demo Mode vs Production Mode
+
+By default, the app runs in **demo mode** with simulated data. This is perfect for:
+- Testing the application
+- Development
+- Showcasing features
+
+To use **real-time data**, you'll need API keys (see Setup section below)
 
 ### Building for Production
 
@@ -64,9 +83,12 @@ npm run build
 #### Environment Variables Setup
 1. Go to your Vercel project settings
 2. Navigate to "Environment Variables"
-3. Add the following:
+3. Add your API keys:
    - `REACT_APP_NEWS_API_KEY` - Your NewsAPI.org key
-   - `REACT_APP_NEWS_API_URL` - https://newsapi.org/v2
+   - `REACT_APP_NASA_FIRMS_KEY` - Your NASA FIRMS key
+   - `REACT_APP_ACLED_KEY` - Your ACLED key (optional)
+   - `REACT_APP_ACLED_EMAIL` - Your ACLED email (optional)
+   - `REACT_APP_DEMO_MODE` - Set to `false` for production
 
 #### Deploy Command
 ```bash
@@ -108,18 +130,70 @@ npm run deploy  # After adding deploy script to package.json
 - Monitor diplomatic status
 - Check red lines and negotiation compatibility
 
+## 🔑 API Setup
+
+### Quick Start (Demo Mode)
+No configuration needed! The app automatically uses simulated data when API keys are not configured.
+
+### Production Setup
+
+1. **Copy the environment template:**
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. **Get your API keys (all free tier available):**
+   - **NewsAPI**: https://newsapi.org/register
+   - **NASA FIRMS**: https://firms.modaps.eosdis.nasa.gov/api/
+   - **ACLED** (optional): https://acleddata.com/register/
+
+3. **Add keys to `.env.local`:**
+   ```env
+   REACT_APP_NEWS_API_KEY=your_newsapi_key_here
+   REACT_APP_NASA_FIRMS_KEY=your_nasa_key_here
+   REACT_APP_ACLED_KEY=your_acled_key_here
+   REACT_APP_ACLED_EMAIL=your_email@example.com
+   ```
+
+4. **Restart the development server**
+
+### CORS Issues?
+Some APIs require a proxy server. See `PROXY_SETUP.md` for detailed instructions on:
+- Setting up a local proxy
+- Using serverless functions
+- Production deployment strategies
+
 ## ⚠️ Data Sources
 
-**Note**: Currently uses simulated data. In production, integrate with:
-- News APIs (Reuters, AP, BBC)
-- Government briefing feeds
-- UN/IAEA reports
-- Intelligence briefings
+The app integrates with multiple real-time data sources:
+
+### Active Integrations:
+- **NewsAPI**: Breaking news and conflict updates
+- **NASA FIRMS**: Fire/explosion detection via satellite
+- **GDELT**: Global event tracking and analysis
+- **ACLED**: Verified conflict event data
+- **ReliefWeb**: UN humanitarian reports
+
+### Demo Data:
+When API keys are not configured, the app uses realistic simulated data that mimics:
+- Real-time news feeds
+- Conflict events and casualties
+- Nuclear facility status
+- Economic impacts
+- OSINT intelligence
 
 ## 🔧 Configuration
 
-Edit `src/services/ConflictDataService.ts` to modify update intervals and data sources.
-Edit `src/theme.ts` to customize the crisis theme colors and styling.
+### Service Configuration
+- `src/services/ConfigService.ts` - API keys and demo mode settings
+- `src/services/ConflictDataService.ts` - Update intervals and data processing
+- `src/theme.ts` - UI theme and styling
+
+### Update Intervals
+- News updates: Every 5 minutes
+- OSINT data: Every 5 minutes
+- Economic data: Every 10 minutes
+- Casualty updates: Real-time from news feeds
 
 ## 📊 Performance
 

@@ -31,6 +31,7 @@ import EconomicImpactDashboard from './EconomicImpactDashboard';
 import RegionalAlliesMonitor from './RegionalAlliesMonitor';
 import SourceCodeViewer from './SourceCodeViewer';
 import OSINTDashboard from './OSINTDashboard';
+import DemoModeNotification from './DemoModeNotification';
 
 const Dashboard: React.FC = () => {
   const [alertCount, setAlertCount] = useState(3);
@@ -77,6 +78,7 @@ const Dashboard: React.FC = () => {
 
       {/* Main Content */}
       <Container maxWidth="xl" sx={{ mt: 2, pb: 4 }}>
+        <DemoModeNotification />
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           {/* Top Row - Main Stats */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>

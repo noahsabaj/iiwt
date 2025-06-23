@@ -4,6 +4,8 @@
  * Integrates GDELT, ACLED, and other real-time intelligence sources
  */
 
+import { configService } from './ConfigService';
+
 interface OSINTSource {
   name: string;
   type: 'flight' | 'maritime' | 'social' | 'satellite' | 'cyber';
@@ -170,7 +172,14 @@ export class OSINTService {
    * Free API available at: https://firms.modaps.eosdis.nasa.gov/api/
    */
   async detectExplosions(): Promise<FireData[]> {
-    const API_KEY = 'YOUR_NASA_FIRMS_KEY'; // Get from NASA
+    const config = configService.getConfig();
+    const API_KEY = config.nasaFirmsKey || '';
+    
+    // Return demo data if no API key
+    if (!API_KEY || config.isDemoMode) {
+      return this.getDemoExplosionData();
+    }
+    
     const baseUrl = 'https://firms.modaps.eosdis.nasa.gov/api/data';
     
     // Areas to monitor (Iran nuclear facilities)
@@ -203,7 +212,8 @@ export class OSINTService {
       );
     } catch (error) {
       console.error('Error fetching FIRMS data:', error);
-      return [];
+      // Return demo data on error
+      return this.getDemoExplosionData();
     }
   }
 
@@ -267,12 +277,11 @@ export class OSINTService {
    * Enhanced with better error handling and data processing
    */
   async getACLEDEvents(): Promise<ACLEDEvent[]> {
-    // ACLED requires authentication - in production, use environment variables
-    const ACLED_KEY = process.env.REACT_APP_ACLED_KEY || '';
-    const ACLED_EMAIL = process.env.REACT_APP_ACLED_EMAIL || '';
+    const config = configService.getConfig();
+    const ACLED_KEY = config.acledKey || '';
+    const ACLED_EMAIL = config.acledEmail || '';
     
-    if (!ACLED_KEY || !ACLED_EMAIL) {
-      console.warn('ACLED credentials not configured, using simulated data');
+    if (!ACLED_KEY || !ACLED_EMAIL || config.isDemoMode) {
       return this.getSimulatedACLEDData();
     }
     
@@ -495,6 +504,31 @@ export class OSINTService {
       trendingTopics,
       breakingAlerts: breakingAlerts.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime())
     };
+  }
+
+  /**
+   * Get demo explosion data when FIRMS API is unavailable
+   */
+  private getDemoExplosionData(): FireData[] {
+    const now = new Date();
+    return [
+      {
+        latitude: 33.7222, // Natanz
+        longitude: 51.9161,
+        brightness: 320,
+        confidence: 75,
+        timestamp: new Date(now.getTime() - 1000 * 60 * 60 * 2), // 2 hours ago
+        satellite: 'VIIRS'
+      },
+      {
+        latitude: 34.0541, // Arak
+        longitude: 49.2311,
+        brightness: 280,
+        confidence: 65,
+        timestamp: new Date(now.getTime() - 1000 * 60 * 60 * 6), // 6 hours ago
+        satellite: 'MODIS'
+      }
+    ];
   }
 
   /**

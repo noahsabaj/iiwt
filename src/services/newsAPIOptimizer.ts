@@ -3,8 +3,8 @@
  * Uses both /everything and /top-headlines endpoints for comprehensive coverage
  */
 
-import axios from 'axios';
 import { NewsArticle } from '../types';
+import { configService } from './ConfigService';
 
 interface NewsAPIResponse {
   status: string;
@@ -27,10 +27,13 @@ export class NewsAPIOptimizer {
   private apiKey: string;
   private baseUrl: string;
   private trustedSources: string[];
+  private isDemoMode: boolean;
 
   constructor(apiKey: string) {
-    this.apiKey = apiKey;
-    this.baseUrl = 'https://newsapi.org/v2';
+    const config = configService.getConfig();
+    this.apiKey = apiKey || config.newsApiKey || '';
+    this.baseUrl = configService.getNewsApiUrl('');
+    this.isDemoMode = config.isDemoMode || !this.apiKey;
     
     // High-reliability news sources for the conflict
     this.trustedSources = [
@@ -81,35 +84,48 @@ export class NewsAPIOptimizer {
   async fetchBreakingNews(): Promise<NewsArticle[]> {
     try {
       // First, try with trusted sources
-      const response = await axios.get<NewsAPIResponse>(`${this.baseUrl}/top-headlines`, {
-        headers: { 'X-Api-Key': this.apiKey },
-        params: {
-          sources: this.trustedSources.join(','),
-          pageSize: 50
-        }
+      const params = new URLSearchParams({
+        sources: this.trustedSources.join(','),
+        pageSize: '50'
       });
+      
+      if (this.apiKey) {
+        params.append('apiKey', this.apiKey);
+      }
+
+      const response = await fetch(`${this.baseUrl}/top-headlines?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data: NewsAPIResponse = await response.json();
 
       // Filter for conflict-related articles
-      const conflictArticles = response.data.articles.filter(article => 
+      const conflictArticles = data.articles.filter(article => 
         this.isConflictRelated(article)
       );
 
       // If not enough results, query by keywords
       if (conflictArticles.length < 10) {
-        const keywordResponse = await axios.get<NewsAPIResponse>(`${this.baseUrl}/top-headlines`, {
-          headers: { 'X-Api-Key': this.apiKey },
-          params: {
-            q: 'Israel Iran',
-            language: 'en',
-            pageSize: 30
-          }
+        const keywordParams = new URLSearchParams({
+          q: 'Israel Iran',
+          language: 'en',
+          pageSize: '30'
         });
+        
+        if (this.apiKey) {
+          keywordParams.append('apiKey', this.apiKey);
+        }
+
+        const keywordResponse = await fetch(`${this.baseUrl}/top-headlines?${keywordParams}`);
+        const keywordData: NewsAPIResponse = await keywordResponse.json();
 
         // Merge and dedupe
         const allArticles = [...conflictArticles];
         const existingUrls = new Set(allArticles.map(a => a.url));
         
-        for (const article of keywordResponse.data.articles) {
+        for (const article of keywordData.articles) {
           if (!existingUrls.has(article.url) && this.isConflictRelated(article)) {
             allArticles.push(article);
           }
@@ -133,20 +149,29 @@ export class NewsAPIOptimizer {
     fromDate.setHours(fromDate.getHours() - hoursBack);
 
     try {
-      const response = await axios.get<NewsAPIResponse>(`${this.baseUrl}/everything`, {
-        headers: { 'X-Api-Key': this.apiKey },
-        params: {
-          q: this.buildConflictQuery(),
-          from: fromDate.toISOString(),
-          to: new Date().toISOString(),
-          language: 'en',
-          sortBy: 'publishedAt',
-          pageSize: 100
-        }
+      const params = new URLSearchParams({
+        q: this.buildConflictQuery(),
+        from: fromDate.toISOString(),
+        to: new Date().toISOString(),
+        language: 'en',
+        sortBy: 'publishedAt',
+        pageSize: '100'
       });
+      
+      if (this.apiKey) {
+        params.append('apiKey', this.apiKey);
+      }
+
+      const response = await fetch(`${this.baseUrl}/everything?${params}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const data: NewsAPIResponse = await response.json();
 
       // Score articles by relevance
-      const scoredArticles = response.data.articles.map(article => ({
+      const scoredArticles = data.articles.map(article => ({
         article,
         score: this.calculateRelevanceScore(article)
       }));
@@ -235,17 +260,21 @@ export class NewsAPIOptimizer {
     const queries = operationNames.map(name => `"${name}"`).join(' OR ');
     
     try {
-      const response = await axios.get<NewsAPIResponse>(`${this.baseUrl}/everything`, {
-        headers: { 'X-Api-Key': this.apiKey },
-        params: {
-          q: queries,
-          language: 'en',
-          sortBy: 'publishedAt',
-          pageSize: 50
-        }
+      const params = new URLSearchParams({
+        q: queries,
+        language: 'en',
+        sortBy: 'publishedAt',
+        pageSize: '50'
       });
       
-      return response.data.articles;
+      if (this.apiKey) {
+        params.append('apiKey', this.apiKey);
+      }
+
+      const response = await fetch(`${this.baseUrl}/everything?${params}`);
+      const data: NewsAPIResponse = await response.json();
+      
+      return data.articles;
     } catch (error) {
       console.error('Error fetching operation news:', error);
       return [];
@@ -257,15 +286,19 @@ export class NewsAPIOptimizer {
    */
   async getRegionalSources(): Promise<any[]> {
     try {
-      const response = await axios.get(`${this.baseUrl}/sources`, {
-        headers: { 'X-Api-Key': this.apiKey },
-        params: {
-          country: 'us,gb,il', // US, UK, Israel
-          language: 'en'
-        }
+      const params = new URLSearchParams({
+        country: 'us,gb,il', // US, UK, Israel
+        language: 'en'
       });
       
-      return response.data.sources;
+      if (this.apiKey) {
+        params.append('apiKey', this.apiKey);
+      }
+
+      const response = await fetch(`${this.baseUrl}/sources?${params}`);
+      const data = await response.json();
+      
+      return data.sources;
     } catch (error) {
       console.error('Error fetching sources:', error);
       return [];
