@@ -24,7 +24,7 @@ class ConfigService {
       nasaFirmsKey: process.env.REACT_APP_NASA_FIRMS_KEY,
       newsProxyUrl: process.env.REACT_APP_NEWS_PROXY_URL,
       isDemoMode: process.env.REACT_APP_DEMO_MODE === 'true' || !process.env.REACT_APP_NEWS_API_KEY,
-      corsProxyUrl: process.env.REACT_APP_CORS_PROXY_URL || 'https://api.allorigins.win/raw?url='
+      corsProxyUrl: process.env.REACT_APP_CORS_PROXY_URL || 'https://cors-anywhere.herokuapp.com/'
     };
   }
 
@@ -54,8 +54,15 @@ class ConfigService {
       return url;
     }
     
-    // Use CORS proxy for external URLs
-    return `${this.config.corsProxyUrl}${encodeURIComponent(url)}`;
+    // Skip proxy for GitHub raw content URLs as they typically allow CORS
+    if (url.includes('raw.githubusercontent.com')) {
+      console.log(`📁 Using direct GitHub raw URL: ${url}`);
+      return url;
+    }
+    
+    // Use CORS proxy for other external URLs
+    console.log(`🌐 Using CORS proxy for: ${url}`);
+    return `${this.config.corsProxyUrl}${url}`;
   }
 
   /**

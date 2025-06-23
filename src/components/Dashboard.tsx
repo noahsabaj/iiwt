@@ -60,12 +60,18 @@ import ConflictIntensityMeter from './ConflictIntensityMeter';
 import TimelineSlider from './TimelineSlider';
 import SearchAndFilter, { FilterOptions } from './SearchAndFilter';
 import { ContextualToolbar, QuickActionToolbar, createDefaultActions } from './QuickActionToolbar';
+import { exportData } from '../utils/exportUtils';
+import { performanceMonitor, memoryMonitor, useDebounce } from '../utils/performance';
+import { ErrorHandler, ErrorFactory, showSuccess, showInfo } from '../utils/errorHandling';
+import { announceToScreenReader, useReducedMotion, createSkipLink } from '../utils/accessibility';
+import { apiCache } from '../utils/cache';
 
 const Dashboard: React.FC = () => {
   const { user, isAuthenticated, logout } = useAuth();
   const { data: conflictData, loading, error, refreshData } = useConflictData();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const prefersReducedMotion = useReducedMotion();
   
   // Existing state
   const [alertCount, setAlertCount] = useState(3);
@@ -94,11 +100,36 @@ const Dashboard: React.FC = () => {
   const [bookmarkedItems, setBookmarkedItems] = useState<string[]>([]);
 
   useEffect(() => {
+    performanceMonitor.startTime('dashboard-init');
+    
+    // Add skip link for accessibility
+    const skipLink = createSkipLink('main-content', 'Skip to conflict data');
+    document.body.insertBefore(skipLink, document.body.firstChild);
+    
+    // Monitor memory usage in development
+    if (process.env.NODE_ENV === 'development') {
+      memoryMonitor.logUsage('Dashboard Mount');
+    }
+
     const interval = setInterval(() => {
       setLastUpdate(new Date());
+      // Check memory usage periodically
+      if (process.env.NODE_ENV === 'development') {
+        memoryMonitor.checkForLeaks();
+      }
     }, 30000); // Update every 30 seconds
 
-    return () => clearInterval(interval);
+    performanceMonitor.endTime('dashboard-init');
+
+    return () => {
+      clearInterval(interval);
+      performanceMonitor.clearMarks('dashboard-init');
+      // Clean up skip link
+      const existingSkipLink = document.querySelector('a[href="#main-content"]');
+      if (existingSkipLink) {
+        document.body.removeChild(existingSkipLink);
+      }
+    };
   }, []);
 
   const conflictStartDate = new Date('2025-06-13T00:00:00Z');
@@ -117,36 +148,86 @@ const Dashboard: React.FC = () => {
     handleUserMenuClose();
   };
 
-  // New UI handlers
+  // Enhanced UI handlers with debouncing and error handling
+  const debouncedRefresh = useDebounce(() => {
+    performanceMonitor.startTime('data-refresh');
+    
+    try {
+      refreshData();
+      setLastUpdate(new Date());
+      announceToScreenReader('Data refreshed successfully', 'polite');
+      showSuccess('Data refreshed');
+      
+      // Clear relevant cache entries
+      apiCache.clearByTags(['conflict-data', 'timeline']);
+      
+      performanceMonitor.endTime('data-refresh');
+    } catch (error) {
+      const appError = ErrorFactory.fromError(error as Error, 'dashboard-refresh');
+      ErrorHandler.handle(appError);
+    }
+  }, 500);
+
   const handleQuickAction = (actionId: string) => {
-    switch (actionId) {
-      case 'refresh':
-        refreshData();
-        setLastUpdate(new Date());
-        break;
-      case 'search':
-        setShowSearchFilter(!showSearchFilter);
-        break;
-      case 'timeline':
-        setShowTimeline(!showTimeline);
-        break;
-      case 'alerts':
-        setAlertModalOpen(true);
-        break;
-      case 'share':
-        navigator.share?.({
-          title: 'Israel-Iran Conflict Tracker',
-          url: window.location.href
-        });
-        break;
-      case 'bookmark':
-        // Toggle bookmark for current view
-        break;
-      case 'download':
-        // Export current data
-        break;
-      default:
-        console.log('Unknown action:', actionId);
+    try {
+      switch (actionId) {
+        case 'refresh':
+          debouncedRefresh();
+          break;
+        case 'search':
+          setShowSearchFilter(!showSearchFilter);
+          announceToScreenReader(
+            showSearchFilter ? 'Search panel closed' : 'Search panel opened',
+            'polite'
+          );
+          break;
+        case 'timeline':
+          setShowTimeline(!showTimeline);
+          announceToScreenReader(
+            showTimeline ? 'Timeline view closed' : 'Timeline view opened',
+            'polite'
+          );
+          break;
+        case 'alerts':
+          setAlertModalOpen(true);
+          announceToScreenReader('Alert modal opened', 'polite');
+          break;
+        case 'share':
+          if (navigator.share) {
+            navigator.share({
+              title: 'Israel-Iran Conflict Tracker',
+              url: window.location.href
+            }).then(() => {
+              showSuccess('Link shared successfully');
+            }).catch(() => {
+              showInfo('Link copied to clipboard');
+              navigator.clipboard?.writeText(window.location.href);
+            });
+          } else {
+            navigator.clipboard?.writeText(window.location.href);
+            showInfo('Link copied to clipboard');
+          }
+          break;
+        case 'bookmark':
+          // Toggle bookmark for current view
+          const isBookmarked = bookmarkedItems.includes('dashboard');
+          if (isBookmarked) {
+            setBookmarkedItems(prev => prev.filter(item => item !== 'dashboard'));
+            announceToScreenReader('Dashboard bookmark removed', 'polite');
+          } else {
+            setBookmarkedItems(prev => [...prev, 'dashboard']);
+            announceToScreenReader('Dashboard bookmarked', 'polite');
+          }
+          break;
+        case 'download':
+          handleExportData();
+          break;
+        default:
+          console.warn('Unknown action:', actionId);
+      }
+    } catch (error) {
+      const appError = ErrorFactory.fromError(error as Error, 'quick-action');
+      ErrorHandler.handle(appError);
     }
   };
 
@@ -158,6 +239,48 @@ const Dashboard: React.FC = () => {
   const handleTimelineChange = (timestamp: Date) => {
     // Filter data based on selected time
     console.log('Timeline changed to:', timestamp);
+  };
+
+  const handleExportData = async () => {
+    performanceMonitor.startTime('data-export');
+    
+    try {
+      announceToScreenReader('Preparing data export...', 'polite');
+      showInfo('Preparing export...');
+
+      const exportDataPayload = {
+        title: 'Israel-Iran Conflict Tracker',
+        timestamp: new Date(),
+        conflictLevel: conflictIntensityData.level,
+        timeline: conflictData?.timeline || timelineEvents,
+        casualties: conflictData?.casualties || { killed: 0, injured: 0 },
+        facilities: conflictData?.facilities || [],
+        threats: conflictData?.threatLevel || null
+      };
+
+      // Show format selection or default to PDF
+      const success = await exportData(exportDataPayload, 'pdf');
+      
+      if (success) {
+        showSuccess('Export completed successfully!');
+        announceToScreenReader('Data exported successfully', 'polite');
+        
+        // Track successful export
+        if (process.env.NODE_ENV === 'development') {
+          console.log('📊 Export successful - PDF generated');
+        }
+      } else {
+        throw new Error('Export operation failed');
+      }
+    } catch (error) {
+      const appError = ErrorFactory.fromError(error as Error, 'data-export');
+      appError.userFriendlyMessage = 'Failed to export data. Please try again.';
+      appError.retry = handleExportData; // Add retry function
+      
+      await ErrorHandler.handle(appError);
+    } finally {
+      performanceMonitor.endTime('data-export');
+    }
   };
 
   // Mock conflict intensity data
@@ -316,7 +439,14 @@ const Dashboard: React.FC = () => {
       </Alert>
 
       {/* Main Content */}
-      <Container maxWidth="xl" sx={{ mt: 2, pb: isMobile ? 10 : 4 }}>
+      <Container 
+        component="main" 
+        id="main-content"
+        maxWidth="xl" 
+        sx={{ mt: 2, pb: isMobile ? 10 : 4 }}
+        role="main"
+        aria-label="Conflict tracking dashboard"
+      >
         <ErrorBoundary>
           <DemoModeNotification />
           
@@ -357,13 +487,17 @@ const Dashboard: React.FC = () => {
             />
           )}
           {loading ? (
-            <DashboardCardSkeleton />
+            <Box role="status" aria-label="Loading conflict data">
+              <DashboardCardSkeleton />
+            </Box>
           ) : error ? (
-            <ErrorState 
-              error={error} 
-              onRetry={refreshData}
-              variant="card"
-            />
+            <Box role="alert" aria-label="Data loading error">
+              <ErrorState 
+                error={error} 
+                onRetry={refreshData}
+                variant="card"
+              />
+            </Box>
           ) : (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               {/* Conflict Intensity Meter - New */}

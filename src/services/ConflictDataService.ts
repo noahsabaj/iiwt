@@ -249,13 +249,38 @@ class ConflictDataService {
 
   // Fetch real data from external APIs
   public async fetchLatestData(): Promise<ExtendedConflictData> {
+    console.log('🔄 Starting fetchLatestData...');
     try {
-      // Fetch from multiple sources in parallel
-      const [newsArticles, governmentData, osintData] = await Promise.all([
-        newsService.fetchConflictNews(),
-        governmentSourcesService.fetchAllGovernmentSources(),
-        osintService.gatherIntelligence()
+      // Create timeout wrapper for API calls
+      const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>((_, reject) => 
+            setTimeout(() => reject(new Error(`${name} timeout after ${timeoutMs}ms`)), timeoutMs)
+          )
+        ]);
+      };
+
+      // Fetch from multiple sources in parallel with timeouts and fallbacks
+      const results = await Promise.allSettled([
+        withTimeout(newsService.fetchConflictNews(), 15000, 'News Service'),
+        withTimeout(governmentSourcesService.fetchAllGovernmentSources(), 15000, 'Government Sources'),
+        withTimeout(osintService.gatherIntelligence(), 30000, 'OSINT Service')
       ]);
+
+      const newsArticles = results[0].status === 'fulfilled' ? results[0].value : [];
+      const governmentData = results[1].status === 'fulfilled' ? results[1].value : [];
+      const osintData = results[2].status === 'fulfilled' ? results[2].value : null;
+
+      // Log any failures
+      results.forEach((result, index) => {
+        const names = ['News Service', 'Government Sources', 'OSINT Service'];
+        if (result.status === 'rejected') {
+          console.warn(`⚠️ ${names[index]} failed:`, result.reason);
+        } else {
+          console.log(`✅ ${names[index]} completed successfully`);
+        }
+      });
 
       // Process news articles for casualties and events
       if (newsArticles.length > 0) {
@@ -268,16 +293,19 @@ class ConflictDataService {
       }
 
       // Update threat level from OSINT
-      if (osintData.explosions.length > 0 || osintData.gdelt?.events?.length > 0 || osintData.acled?.events?.length > 0) {
+      if (osintData && (osintData.explosions?.length > 0 || osintData.gdelt?.events?.length > 0 || osintData.acled?.events?.length > 0)) {
         this.processOSINTData(osintData);
       }
 
       this.data.lastGlobalUpdate = new Date().toISOString();
       this.notifySubscribers();
       
+      console.log('✅ fetchLatestData completed successfully');
       return this.getCurrentData();
     } catch (error) {
-      console.error('Error fetching latest data:', error);
+      console.error('❌ Error in fetchLatestData:', error);
+      // Ensure we notify subscribers with current data even on error
+      this.notifySubscribers();
       // Return current data as fallback
       return this.getCurrentData();
     }

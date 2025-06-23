@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -33,6 +33,9 @@ import {
 } from '@mui/icons-material';
 import { osintService, OSINTData } from '../services/OSINTService';
 import { useConflictData } from '../contexts/ConflictDataContext';
+import { apiCache } from '../utils/cache';
+import { performanceMonitor } from '../utils/performance';
+import { ErrorHandler, ErrorFactory, showWarning } from '../utils/errorHandling';
 
 const OSINTDashboard: React.FC = () => {
   const [osintData, setOsintData] = useState<OSINTData | null>(null);
@@ -40,28 +43,74 @@ const OSINTDashboard: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const { data: conflictData } = useConflictData();
 
-  useEffect(() => {
-    fetchOSINTData();
-    const interval = setInterval(fetchOSINTData, 300000); // Refresh every 5 minutes
-    return () => clearInterval(interval);
-  }, []);
-
-  const fetchOSINTData = async () => {
+  const fetchOSINTData = useCallback(async (useCache: boolean = true) => {
+    const cacheKey = 'osint-intelligence';
+    
     try {
+      // Check cache first if requested
+      if (useCache) {
+        const cachedData = apiCache.get(cacheKey) as OSINTData | null;
+        if (cachedData) {
+          console.log('📦 Using cached OSINT data');
+          setOsintData(cachedData);
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+      }
+
+      console.log('🔄 Fetching fresh OSINT data...');
       setLoading(true);
+      
+      performanceMonitor.startTime('osint-fetch');
+      
       const data = await osintService.gatherIntelligence();
+      
+      // Cache the data for 3 minutes
+      apiCache.set(cacheKey, data, { 
+        ttl: 180000, // 3 minutes
+        tags: ['osint', 'intelligence']
+      });
+      
       setOsintData(data);
+      
+      performanceMonitor.endTime('osint-fetch');
+      console.log('✅ OSINT data loaded successfully');
+      
     } catch (error) {
-      console.error('Error fetching OSINT data:', error);
+      console.error('❌ Error fetching OSINT data:', error);
+      
+      const appError = ErrorFactory.fromError(error as Error, 'osint-fetch');
+      appError.userFriendlyMessage = 'Failed to load intelligence data. Retrying...';
+      appError.retry = () => fetchOSINTData(false);
+      
+      await ErrorHandler.handle(appError);
+      
+      // Try to use stale cache data as fallback
+      const staleData = apiCache.get(cacheKey) as OSINTData | null;
+      if (staleData) {
+        console.log('📦 Using stale cached data as fallback');
+        setOsintData(staleData);
+        showWarning('Using cached data due to loading issues');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
+      performanceMonitor.clearMarks('osint-fetch');
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchOSINTData();
+    const interval = setInterval(() => fetchOSINTData(), 300000); // Refresh every 5 minutes
+    return () => clearInterval(interval);
+  }, [fetchOSINTData]);
 
   const handleRefresh = () => {
+    console.log('🔄 Manual refresh triggered');
     setRefreshing(true);
-    fetchOSINTData();
+    // Force fresh data (bypass cache)
+    fetchOSINTData(false);
   };
 
   const getSeverityColor = (goldstein: number): string => {
@@ -84,8 +133,21 @@ const OSINTDashboard: React.FC = () => {
     return (
       <Card sx={{ height: '100%' }}>
         <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300 }}>
-            <CircularProgress />
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+            <SecurityIcon sx={{ mr: 1, color: '#2196f3' }} />
+            <Typography variant="h6" component="h2" sx={{ fontWeight: 600, flexGrow: 1 }}>
+              OPEN SOURCE INTELLIGENCE (OSINT)
+            </Typography>
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 250, gap: 2 }}>
+            <CircularProgress size={60} />
+            <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
+              Gathering intelligence from multiple sources...
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center' }}>
+              This may take up to 30 seconds for fresh data
+            </Typography>
+            <LinearProgress sx={{ width: '60%', mt: 2 }} />
           </Box>
         </CardContent>
       </Card>

@@ -632,19 +632,49 @@ export class OSINTService {
 
   /**
    * Aggregate all OSINT sources with enhanced data
+   * Optimized with parallel execution and timeouts
    */
   async gatherIntelligence(): Promise<OSINTData> {
-    const [gdeltResult, acledResult, flightsResult, explosionsResult] = await Promise.allSettled([
-      this.fetchGDELTEvents(),
-      this.getACLEDEvents(),
-      this.trackMilitaryFlights(),
-      this.detectExplosions()
+    console.log('🔍 Starting OSINT intelligence gathering...');
+    const startTime = Date.now();
+
+    // Create timeout wrapper for API calls
+    const withTimeout = <T>(promise: Promise<T>, timeoutMs: number, name: string): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((_, reject) => 
+          setTimeout(() => reject(new Error(`${name} timeout after ${timeoutMs}ms`)), timeoutMs)
+        )
+      ]);
+    };
+
+    // Run ALL calls in parallel with timeouts
+    const [gdeltResult, acledResult, flightsResult, explosionsResult, socialResult] = await Promise.allSettled([
+      withTimeout(this.fetchGDELTEvents(), 15000, 'GDELT'),
+      withTimeout(this.getACLEDEvents(), 15000, 'ACLED'), 
+      withTimeout(this.trackMilitaryFlights(), 10000, 'Flights'),
+      withTimeout(this.detectExplosions(), 10000, 'Explosions'),
+      withTimeout(this.monitorSocialOSINT(), 20000, 'Social OSINT')
     ]);
 
     const gdeltEvents = gdeltResult.status === 'fulfilled' ? gdeltResult.value : [];
     const acledEvents = acledResult.status === 'fulfilled' ? acledResult.value : [];
     const flights = flightsResult.status === 'fulfilled' ? flightsResult.value : [];
     const explosions = explosionsResult.status === 'fulfilled' ? explosionsResult.value : [];
+    const socialIntel = socialResult.status === 'fulfilled' ? socialResult.value : {
+      trendingTopics: [],
+      breakingAlerts: []
+    };
+
+    // Log any failures
+    [gdeltResult, acledResult, flightsResult, explosionsResult, socialResult].forEach((result, index) => {
+      const names = ['GDELT', 'ACLED', 'Flights', 'Explosions', 'Social OSINT'];
+      if (result.status === 'rejected') {
+        console.warn(`⚠️ ${names[index]} failed:`, result.reason);
+      } else {
+        console.log(`✅ ${names[index]} completed successfully`);
+      }
+    });
 
     // Calculate ACLED statistics
     const now = new Date();
@@ -658,6 +688,9 @@ export class OSINTService {
       explosionEvents: recent24hACLED.filter(e => e.event_type.includes('Explosion')).length
     };
 
+    const elapsed = Date.now() - startTime;
+    console.log(`🏁 OSINT intelligence gathering completed in ${elapsed}ms`);
+
     return {
       gdelt: {
         events: gdeltEvents,
@@ -667,7 +700,7 @@ export class OSINTService {
       acled: acledStats,
       flights,
       explosions,
-      socialIntel: await this.monitorSocialOSINT(),
+      socialIntel,
       timestamp: new Date()
     };
   }

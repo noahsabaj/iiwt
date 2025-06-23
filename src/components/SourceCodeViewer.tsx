@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -30,6 +30,7 @@ import {
   Check as CheckIcon,
 } from '@mui/icons-material';
 import { CopyBlock, dracula } from 'react-code-blocks';
+import { configService } from '../services/ConfigService';
 
 interface GitHubFile {
   name: string;
@@ -69,40 +70,7 @@ const SourceCodeViewer: React.FC<SourceCodeViewerProps> = ({
     'src/components/ConflictMap.tsx',
   ];
 
-  useEffect(() => {
-    fetchRepositoryStructure();
-  }, [owner, repo]);
-
-  const fetchRepositoryStructure = async (path: string = '') => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to fetch repository data');
-      }
-      
-      const data = await response.json();
-      
-      // Build a tree structure
-      const tree = await buildFileTree(data);
-      setFileTree(tree);
-      
-      // Auto-select a key file
-      const readmeFile = data.find((f: any) => f.name.toLowerCase() === 'readme.md');
-      if (readmeFile) {
-        handleFileSelect(readmeFile);
-      }
-    } catch (err) {
-      setError('Unable to load repository. This may be due to GitHub API rate limits.');
-      console.error('Error fetching repository:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const buildFileTree = async (items: any[]): Promise<GitHubFile[]> => {
+  const buildFileTree = useCallback(async (items: any[]): Promise<GitHubFile[]> => {
     const tree: GitHubFile[] = [];
     
     // Sort folders first, then files
@@ -125,11 +93,18 @@ const SourceCodeViewer: React.FC<SourceCodeViewerProps> = ({
       // For important directories, fetch their contents
       if (item.type === 'dir' && ['src', 'public'].includes(item.name)) {
         try {
-          const response = await fetch(item.url);
+          const proxyUrl = configService.getProxiedUrl(item.url);
+          console.log(`🔍 Fetching directory: ${item.path} from ${proxyUrl}`);
+          const response = await fetch(proxyUrl);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
           const children = await response.json();
           file.children = await buildFileTree(children);
         } catch (err) {
-          console.error(`Error fetching contents of ${item.path}:`, err);
+          console.error(`❌ Error fetching contents of ${item.path}:`, err);
         }
       }
 
@@ -137,9 +112,72 @@ const SourceCodeViewer: React.FC<SourceCodeViewerProps> = ({
     }
 
     return tree;
-  };
+  }, []);
 
-  const handleFileSelect = async (file: GitHubFile) => {
+  const fetchRepositoryStructure = useCallback(async (path: string = '') => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Use CORS proxy for GitHub API
+      const githubUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+      console.log(`🔍 Fetching repository: ${githubUrl}`);
+      
+      const proxyUrl = configService.getProxiedUrl(githubUrl);
+      console.log(`🌐 Using proxy: ${proxyUrl}`);
+      
+      const response = await fetch(proxyUrl);
+      console.log(`📊 Repository response: ${response.status} ${response.statusText}`);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch repository data: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log(`📁 Found ${data.length} items in repository`);
+      
+      // Build a tree structure
+      const tree = await buildFileTree(data);
+      setFileTree(tree);
+      
+      // Auto-select a key file
+      const readmeFile = data.find((f: any) => f.name.toLowerCase() === 'readme.md');
+      if (readmeFile && readmeFile.download_url) {
+        console.log(`📖 Auto-selecting README: ${readmeFile.download_url}`);
+        setSelectedFile(readmeFile);
+        setLoadingFile(true);
+        try {
+          const proxyUrl = configService.getProxiedUrl(readmeFile.download_url);
+          const response = await fetch(proxyUrl);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const content = await response.text();
+          setFileContent(content);
+          console.log(`✅ README loaded successfully (${content.length} chars)`);
+        } catch (err) {
+          console.error('❌ Error loading README:', err);
+          setFileContent(`Error loading README: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        } finally {
+          setLoadingFile(false);
+        }
+      }
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      setError(`Unable to load repository: ${errorMsg}`);
+      console.error('❌ Repository fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [owner, repo, buildFileTree]);
+
+  useEffect(() => {
+    fetchRepositoryStructure();
+  }, [fetchRepositoryStructure]);
+
+  const handleFileSelect = useCallback(async (file: GitHubFile) => {
     if (file.type === 'dir') {
       // Toggle folder expansion
       const newExpanded = new Set(expandedFolders);
@@ -150,7 +188,8 @@ const SourceCodeViewer: React.FC<SourceCodeViewerProps> = ({
         // Fetch children if not already loaded
         if (!file.children) {
           try {
-            const response = await fetch(file.url);
+            const proxyUrl = configService.getProxiedUrl(file.url);
+            const response = await fetch(proxyUrl);
             const children = await response.json();
             file.children = await buildFileTree(children);
             setFileTree([...fileTree]); // Trigger re-render
@@ -165,16 +204,35 @@ const SourceCodeViewer: React.FC<SourceCodeViewerProps> = ({
       setSelectedFile(file);
       setLoadingFile(true);
       try {
-        const response = await fetch(file.download_url!);
-        const content = await response.text();
-        setFileContent(content);
+        if (file.download_url) {
+          console.log(`🔍 Loading file: ${file.name}`);
+          console.log(`📥 Download URL: ${file.download_url}`);
+          
+          const proxyUrl = configService.getProxiedUrl(file.download_url);
+          console.log(`🌐 Proxy URL: ${proxyUrl}`);
+          
+          const response = await fetch(proxyUrl);
+          console.log(`📊 Response status: ${response.status} ${response.statusText}`);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+          
+          const content = await response.text();
+          console.log(`✅ Loaded content (${content.length} chars)`);
+          setFileContent(content);
+        } else {
+          console.warn(`❌ No download URL for file: ${file.name}`);
+          setFileContent('No download URL available for this file');
+        }
       } catch (err) {
-        setFileContent('Error loading file content');
+        console.error(`❌ Error loading file ${file.name}:`, err);
+        setFileContent(`Error loading file content: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setLoadingFile(false);
       }
     }
-  };
+  }, [expandedFolders, fileTree, buildFileTree]);
 
   const getLanguageFromFile = (filename: string): string => {
     const extension = filename.split('.').pop()?.toLowerCase();
