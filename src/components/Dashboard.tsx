@@ -23,13 +23,14 @@ import ConflictTimeline from './ConflictTimeline';
 import ThreatLevelIndicator from './ThreatLevelIndicator';
 import AlertModal from './AlertModal';
 import DemandTracker from './DemandTracker';
-import ConflictMap from './ConflictMap';
+import EnhancedConflictMap from './EnhancedConflictMap';
 import DataSourceIndicator from './DataSourceIndicator';
 import MilitaryOperationsTracker from './MilitaryOperationsTracker';
 import WeaponsTracker from './WeaponsTracker';
 import EconomicImpactDashboard from './EconomicImpactDashboard';
 import RegionalAlliesMonitor from './RegionalAlliesMonitor';
 import SourceCodeViewer from './SourceCodeViewer';
+import OSINTDashboard from './OSINTDashboard';
 
 const Dashboard: React.FC = () => {
   const [alertCount, setAlertCount] = useState(3);
@@ -80,7 +81,7 @@ const Dashboard: React.FC = () => {
           {/* Top Row - Main Stats */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' }, gap: 3 }}>
             <CasualtyCounter />
-            <ConflictMap />
+            <EnhancedConflictMap />
           </Box>
 
           {/* Middle Row - Threat & Timeline */}
@@ -105,6 +106,11 @@ const Dashboard: React.FC = () => {
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 3 }}>
             <EconomicImpactDashboard />
             <RegionalAlliesMonitor />
+          </Box>
+
+          {/* OSINT Intelligence Row */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 3 }}>
+            <OSINTDashboard />
           </Box>
 
           {/* Source Code & Transparency Row */}

@@ -5,6 +5,7 @@ import { EventProcessor } from './eventProcessor';
 import { deduplicateTimelineEvents } from './deduplication';
 import { VerificationService } from './verificationService';
 import { NLPService } from './nlpService';
+import { eventDatabase } from './EventDatabase';
 import { 
   ConflictData, 
   TimelineEvent, 
@@ -265,7 +266,7 @@ class ConflictDataService {
       }
 
       // Update threat level from OSINT
-      if (osintData.explosions.length > 0 || osintData.events.length > 0) {
+      if (osintData.explosions.length > 0 || osintData.gdelt?.events?.length > 0 || osintData.acled?.events?.length > 0) {
         this.processOSINTData(osintData);
       }
 
@@ -324,6 +325,13 @@ class ConflictDataService {
         return timeB - timeA;
       })
       .slice(0, 50); // Keep latest 50 events
+    
+    // Store new events in database
+    if (uniqueNewEvents.length > 0) {
+      eventDatabase.storeEvents(uniqueNewEvents).catch(err => 
+        console.error('Failed to store events in database:', err)
+      );
+    }
     
     // Extract casualties from articles using enhanced NLP
     const recentArticles = articles.slice(0, 10);
@@ -406,21 +414,44 @@ class ConflictDataService {
 
   private processOSINTData(data: any) {
     // Update threat level based on activity
-    if (data.explosions.length > 5) {
+    if (data.explosions?.length > 5) {
       this.data.threatLevel.globalLevel = 5;
-    } else if (data.explosions.length > 2) {
+    } else if (data.explosions?.length > 2) {
       this.data.threatLevel.globalLevel = 4;
     }
     
-    // Update regional threat based on events
-    if (data.events) {
-      for (const event of data.events) {
+    // Update threat level based on GDELT conflict intensity
+    if (data.gdelt?.conflictIntensity) {
+      const intensity = data.gdelt.conflictIntensity;
+      if (intensity >= 80) {
+        this.data.threatLevel.globalLevel = 5;
+      } else if (intensity >= 60) {
+        this.data.threatLevel.globalLevel = Math.max(4, this.data.threatLevel.globalLevel);
+      }
+    }
+    
+    // Update regional threat based on ACLED events
+    if (data.acled?.events) {
+      for (const event of data.acled.events) {
         const region = this.getRegionFromLocation(event.location);
         if (region) {
           const regionData = this.data.threatLevel.regions.find(r => r.name === region);
           if (regionData && event.fatalities > 0) {
             regionData.trend = 'increasing';
             regionData.level = Math.min(5, regionData.level + 1);
+          }
+        }
+      }
+    }
+    
+    // Update regional threat based on GDELT hotspots
+    if (data.gdelt?.hotspots) {
+      for (const hotspot of data.gdelt.hotspots) {
+        const region = this.getRegionFromLocation(hotspot.location);
+        if (region) {
+          const regionData = this.data.threatLevel.regions.find(r => r.name === region);
+          if (regionData && hotspot.intensity > 50) {
+            regionData.trend = 'increasing';
           }
         }
       }
