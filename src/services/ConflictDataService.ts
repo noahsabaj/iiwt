@@ -176,15 +176,17 @@ class ConflictDataService {
     // Initial fetch
     this.fetchLatestData();
 
-    // Fetch real data every 60 seconds
+    // With NewsAPI free tier (100 requests/day), we need to be conservative
+    // 100 requests / 24 hours = ~4 requests per hour
+    // Let's update every 30 minutes to stay well within limits
     setInterval(() => {
       this.fetchLatestData();
-    }, 60000); // Update every minute
+    }, 30 * 60 * 1000); // Update every 30 minutes
 
-    // Quick updates for simulated data between API calls
+    // Update UI with simulated changes between API calls
     setInterval(() => {
       this.updateData();
-    }, 30000); // Update every 30 seconds
+    }, 30000); // Update UI every 30 seconds
   }
 
   private updateData() {

@@ -112,8 +112,16 @@ class NewsService {
 
       if (!response.ok) {
         // Handle CORS and API errors gracefully
-        if (response.status === 0 || response.status === 426) {
+        if (response.status === 0) {
           console.log('CORS error detected, NewsAPI requires server-side proxy');
+          return [];
+        }
+        if (response.status === 426) {
+          console.log('NewsAPI free tier limit exceeded, upgrade required');
+          return [];
+        }
+        if (response.status === 401) {
+          console.log('NewsAPI authentication failed, check API key');
           return [];
         }
         throw new Error(`News API error: ${response.status}`);

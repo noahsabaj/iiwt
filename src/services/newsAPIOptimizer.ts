@@ -5,6 +5,7 @@
 
 import { NewsArticle } from '../types';
 import { configService } from './ConfigService';
+import { newsApiRateLimiter } from './RateLimiter';
 
 interface NewsAPIResponse {
   status: string;
@@ -28,6 +29,8 @@ export class NewsAPIOptimizer {
   private baseUrl: string;
   private trustedSources: string[];
   private isDemoMode: boolean;
+  private cache: Map<string, { data: any; timestamp: number }> = new Map();
+  private CACHE_DURATION = 30 * 60 * 1000; // 30 minutes cache
 
   constructor(apiKey: string) {
     const config = configService.getConfig();
@@ -82,7 +85,21 @@ export class NewsAPIOptimizer {
    * Fetch breaking news using top-headlines endpoint
    */
   async fetchBreakingNews(): Promise<NewsArticle[]> {
+    // Check cache first to minimize API calls
+    const cacheKey = 'breaking-news';
+    const cached = this.getFromCache(cacheKey);
+    if (cached) {
+      console.log('Using cached breaking news (saving API calls)');
+      return cached;
+    }
+    
     try {
+      // Check rate limit
+      if (!newsApiRateLimiter.canMakeRequest()) {
+        console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+        return [];
+      }
+      
       // First, try with trusted sources
       const params = new URLSearchParams({
         sources: this.trustedSources.join(','),
@@ -96,8 +113,15 @@ export class NewsAPIOptimizer {
       const response = await fetch(`${this.baseUrl}/top-headlines?${params}`);
       
       if (!response.ok) {
+        if (response.status === 426) {
+          console.log('NewsAPI: Daily limit (100 requests) exceeded. Consider upgrading to a paid plan.');
+          return [];
+        }
         throw new Error(`API error: ${response.status}`);
       }
+      
+      // Record successful request
+      newsApiRateLimiter.recordRequest();
       
       const data: NewsAPIResponse = await response.json();
 
@@ -108,6 +132,12 @@ export class NewsAPIOptimizer {
 
       // If not enough results, query by keywords
       if (conflictArticles.length < 10) {
+        // Check rate limit before second request
+        if (!newsApiRateLimiter.canMakeRequest()) {
+          console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+          return conflictArticles; // Return what we have
+        }
+        
         const keywordParams = new URLSearchParams({
           q: 'Israel Iran',
           language: 'en',
@@ -119,6 +149,11 @@ export class NewsAPIOptimizer {
         }
 
         const keywordResponse = await fetch(`${this.baseUrl}/top-headlines?${keywordParams}`);
+        
+        if (keywordResponse.ok) {
+          newsApiRateLimiter.recordRequest();
+        }
+        
         const keywordData: NewsAPIResponse = await keywordResponse.json();
 
         // Merge and dedupe
@@ -134,6 +169,8 @@ export class NewsAPIOptimizer {
         return allArticles;
       }
 
+      // Cache results to reduce API calls
+      this.saveToCache(cacheKey, conflictArticles);
       return conflictArticles;
     } catch (error) {
       console.error('Error fetching breaking news:', error);
@@ -145,10 +182,24 @@ export class NewsAPIOptimizer {
    * Fetch comprehensive historical data using everything endpoint
    */
   async fetchHistoricalData(hoursBack: number = 24): Promise<NewsArticle[]> {
+    // Check cache first
+    const cacheKey = `historical-${hoursBack}h`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) {
+      console.log('Using cached historical data (saving API calls)');
+      return cached;
+    }
+    
     const fromDate = new Date();
     fromDate.setHours(fromDate.getHours() - hoursBack);
 
     try {
+      // Check rate limit
+      if (!newsApiRateLimiter.canMakeRequest()) {
+        console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+        return [];
+      }
+      
       const params = new URLSearchParams({
         q: this.buildConflictQuery(),
         from: fromDate.toISOString(),
@@ -165,8 +216,15 @@ export class NewsAPIOptimizer {
       const response = await fetch(`${this.baseUrl}/everything?${params}`);
       
       if (!response.ok) {
+        if (response.status === 426) {
+          console.log('NewsAPI: Daily limit exceeded on historical data request.');
+          return [];
+        }
         throw new Error(`API error: ${response.status}`);
       }
+      
+      // Record successful request
+      newsApiRateLimiter.recordRequest();
       
       const data: NewsAPIResponse = await response.json();
 
@@ -177,11 +235,15 @@ export class NewsAPIOptimizer {
       }));
 
       // Sort by score and return top articles
-      return scoredArticles
+      const results = scoredArticles
         .filter(item => item.score > 0.5)
         .sort((a, b) => b.score - a.score)
         .map(item => item.article)
         .slice(0, 50);
+      
+      // Cache results
+      this.saveToCache(cacheKey, results);
+      return results;
 
     } catch (error) {
       console.error('Error fetching historical data:', error);
@@ -257,6 +319,20 @@ export class NewsAPIOptimizer {
    * Fetch articles by specific operation names
    */
   async fetchOperationNews(operationNames: string[]): Promise<NewsArticle[]> {
+    // Check cache first
+    const cacheKey = `operations-${operationNames.join('-')}`;
+    const cached = this.getFromCache(cacheKey);
+    if (cached) {
+      console.log('Using cached operation news (saving API calls)');
+      return cached;
+    }
+    
+    // Check rate limit
+    if (!newsApiRateLimiter.canMakeRequest()) {
+      console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+      return [];
+    }
+    
     const queries = operationNames.map(name => `"${name}"`).join(' OR ');
     
     try {
@@ -272,7 +348,22 @@ export class NewsAPIOptimizer {
       }
 
       const response = await fetch(`${this.baseUrl}/everything?${params}`);
+      
+      if (!response.ok) {
+        if (response.status === 426) {
+          console.log('NewsAPI: Daily limit exceeded on operation news request.');
+          return [];
+        }
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      // Record successful request
+      newsApiRateLimiter.recordRequest();
+      
       const data: NewsAPIResponse = await response.json();
+      
+      // Cache results
+      this.saveToCache(cacheKey, data.articles);
       
       return data.articles;
     } catch (error) {
@@ -285,6 +376,20 @@ export class NewsAPIOptimizer {
    * Get all available sources for the region
    */
   async getRegionalSources(): Promise<any[]> {
+    // Check cache first
+    const cacheKey = 'regional-sources';
+    const cached = this.getFromCache(cacheKey);
+    if (cached) {
+      console.log('Using cached regional sources (saving API calls)');
+      return cached;
+    }
+    
+    // Check rate limit
+    if (!newsApiRateLimiter.canMakeRequest()) {
+      console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+      return [];
+    }
+    
     try {
       const params = new URLSearchParams({
         country: 'us,gb,il', // US, UK, Israel
@@ -296,12 +401,40 @@ export class NewsAPIOptimizer {
       }
 
       const response = await fetch(`${this.baseUrl}/sources?${params}`);
+      
+      if (!response.ok) {
+        if (response.status === 426) {
+          console.log('NewsAPI: Daily limit exceeded on sources request.');
+          return [];
+        }
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      // Record successful request
+      newsApiRateLimiter.recordRequest();
+      
       const data = await response.json();
       
-      return data.sources;
+      // Cache results for longer since sources don't change often
+      this.saveToCache(cacheKey, data.sources);
+      
+      return data.sources || [];
     } catch (error) {
       console.error('Error fetching sources:', error);
       return [];
     }
+  }
+
+  // Cache helper methods
+  private getFromCache(key: string): any {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  private saveToCache(key: string, data: any): void {
+    this.cache.set(key, { data, timestamp: Date.now() });
   }
 }

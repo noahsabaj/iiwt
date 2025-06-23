@@ -132,26 +132,26 @@ class GovernmentSourcesService {
     }
 
     try {
+      // ReliefWeb API v1 format - use query parameter with JSON
+      const query = {
+        value: '(country:"Iran" OR country:"Israel") AND (conflict OR humanitarian OR crisis)',
+        fields: ['country', 'title', 'body']
+      };
+      
       const params = new URLSearchParams({
-        'appname': 'conflict-tracker',
-        'filter[field]': 'country.iso3',
-        'filter[value]': 'IRN', // Iran ISO3 code
-        'filter[operator]': 'OR',
-        'filter[conditions][0][field]': 'country.iso3',
-        'filter[conditions][0][value]': 'ISR', // Israel ISO3 code
-        'fields[include]': 'title,body,date,source,url',
-        'sort': '-date.created',
-        'limit': '10'
+        appname: 'conflict-tracker',
+        query: JSON.stringify(query),
+        fields: JSON.stringify({
+          include: ['title', 'body', 'date', 'source', 'url']
+        }),
+        limit: '10'
       });
 
-      const response = await fetch(
-        `https://api.reliefweb.int/v1/reports?${params}`,
-        {
-          headers: {
-            'Accept': 'application/json'
-          }
+      const response = await fetch(`https://api.reliefweb.int/v1/reports?${params}`, {
+        headers: {
+          'Accept': 'application/json'
         }
-      );
+      });
       
       if (!response.ok) {
         throw new Error(`ReliefWeb API error: ${response.status}`);
