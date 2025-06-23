@@ -2,6 +2,7 @@ import { NewsAPIOptimizer } from './newsAPIOptimizer';
 import { VerificationService } from './verificationService';
 import { NewsArticle } from '../types';
 import { configService } from './ConfigService';
+import { authService } from './authService';
 
 interface NewsResponse {
   status: string;
@@ -30,7 +31,8 @@ class NewsService {
     this.articleCache = new Map();
     this.cacheExpiry = new Map();
     
-    if (this.isDemoMode) {
+    // Only log in development mode
+    if (this.isDemoMode && process.env.NODE_ENV === 'development') {
       console.log('📰 NewsService: Running in demo mode');
     }
   }
@@ -77,7 +79,6 @@ class NewsService {
       
       // If no articles were fetched, use demo data
       if (allArticles.length === 0) {
-        console.log('No articles fetched from NewsAPI, using demo data');
         return this.getDemoNews();
       }
       
@@ -108,20 +109,22 @@ class NewsService {
         params.append('apiKey', this.apiKey);
       }
 
-      const response = await fetch(`${this.baseUrl}/top-headlines?${params}`);
+      const response = await fetch(`${this.baseUrl}/top-headlines?${params}`, {
+        headers: authService.getAuthHeaders()
+      });
 
       if (!response.ok) {
         // Handle CORS and API errors gracefully
         if (response.status === 0) {
-          console.log('CORS error detected, NewsAPI requires server-side proxy');
+          // CORS error
           return [];
         }
         if (response.status === 426) {
-          console.log('NewsAPI free tier limit exceeded, upgrade required');
+          // Rate limit exceeded
           return [];
         }
         if (response.status === 401) {
-          console.log('NewsAPI authentication failed, check API key');
+          // Authentication failed
           return [];
         }
         throw new Error(`News API error: ${response.status}`);

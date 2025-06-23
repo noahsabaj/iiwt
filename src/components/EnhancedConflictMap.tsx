@@ -37,36 +37,63 @@ L.Icon.Default.mergeOptions({
   shadowUrl: markerShadow,
 });
 
-// Enhanced custom icons with animations
-const createAnimatedIcon = (color: string, symbol: string, isAnimated: boolean = false) => L.divIcon({
-  html: `<div class="${isAnimated ? 'animated-marker' : ''}" style="
-    background-color: ${color};
-    width: 30px;
-    height: 30px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 2px solid white;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-    font-size: 16px;
-    position: relative;
-  ">
-    ${symbol}
-    ${isAnimated ? `<div class="pulse-ring" style="
-      position: absolute;
-      width: 100%;
-      height: 100%;
+// Helper function to escape HTML and prevent XSS attacks
+const escapeHtml = (unsafe: string): string => {
+  return unsafe
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+// Validate CSS color to prevent injection
+const validateColor = (color: string): string => {
+  // Only allow hex colors or known color names
+  const isHexColor = /^#[0-9A-F]{6}$/i.test(color);
+  const safeColorNames = ['red', 'blue', 'green', 'yellow', 'orange', 'purple', 'white', 'black'];
+  
+  if (isHexColor || safeColorNames.includes(color.toLowerCase())) {
+    return color;
+  }
+  return '#000000'; // Default to black if invalid
+};
+
+// Enhanced custom icons with animations and XSS protection
+const createAnimatedIcon = (color: string, symbol: string, isAnimated: boolean = false) => {
+  const safeColor = validateColor(color);
+  const safeSymbol = escapeHtml(symbol);
+  
+  return L.divIcon({
+    html: `<div class="${isAnimated ? 'animated-marker' : ''}" style="
+      background-color: ${safeColor};
+      width: 30px;
+      height: 30px;
       border-radius: 50%;
-      border: 2px solid ${color};
-      animation: pulse 2s infinite;
-    "></div>` : ''}
-  </div>`,
-  iconSize: [30, 30],
-  iconAnchor: [15, 15],
-  popupAnchor: [0, -15],
-  className: 'custom-div-icon',
-});
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+      font-size: 16px;
+      position: relative;
+    ">
+      ${safeSymbol}
+      ${isAnimated ? `<div class="pulse-ring" style="
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        border-radius: 50%;
+        border: 2px solid ${safeColor};
+        animation: pulse 2s infinite;
+      "></div>` : ''}
+    </div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15],
+    popupAnchor: [0, -15],
+    className: 'custom-div-icon',
+  });
+};
 
 const facilityIcon = createAnimatedIcon('#ff9800', '☢️');
 const activeStrikeIcon = createAnimatedIcon('#f44336', '💥', true);

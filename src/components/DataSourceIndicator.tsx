@@ -25,6 +25,7 @@ import {
   ExpandLess as ExpandLessIcon,
 } from '@mui/icons-material';
 import { useConflictData } from '../contexts/ConflictDataContext';
+import { RateLimitedButton } from './RateLimitedButton';
 
 interface DataSource {
   name: string;
@@ -152,22 +153,33 @@ const DataSourceIndicator: React.FC = () => {
             }}
           />
           
-          <Tooltip title="Refresh data">
-            <IconButton
-              size="small"
-              onClick={handleRefresh}
-              disabled={loading}
-              sx={{
-                animation: loading ? 'spin 1s linear infinite' : 'none',
-                '@keyframes spin': {
-                  '0%': { transform: 'rotate(0deg)' },
-                  '100%': { transform: 'rotate(360deg)' },
-                },
-              }}
-            >
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
+          <RateLimitedButton
+            size="small"
+            onClick={handleRefresh}
+            loading={loading}
+            rateLimitOptions={{
+              maxRequests: 10,
+              windowMs: 60000 // 10 refreshes per minute
+            }}
+            onRateLimitReached={() => {
+              // Could show a notification here
+            }}
+            sx={{
+              minWidth: 'auto',
+              p: 0.5,
+              '& .MuiCircularProgress-root': {
+                mr: 0
+              }
+            }}
+          >
+            <RefreshIcon sx={{
+              animation: loading ? 'spin 1s linear infinite' : 'none',
+              '@keyframes spin': {
+                '0%': { transform: 'rotate(0deg)' },
+                '100%': { transform: 'rotate(360deg)' },
+              },
+            }} />
+          </RateLimitedButton>
         </Box>
 
         <IconButton

@@ -199,7 +199,15 @@ export class OSINTService {
           area: `${facility.lat-0.5},${facility.lng-0.5},${facility.lat+0.5},${facility.lng+0.5}`
         });
 
-        const response = await fetch(`${baseUrl}?${params}&api_key=${API_KEY}`);
+        const paramsWithoutKey = new URLSearchParams({
+          source: 'VIIRS_SNPP_NRT',
+          day_range: '1',
+          area: `${facility.lat-0.5},${facility.lng-0.5},${facility.lat+0.5},${facility.lng+0.5}`
+        });
+        
+        const response = await fetch(
+          configService.getOsintApiUrl('firms', `/area?${paramsWithoutKey}`)
+        );
         return response.json();
       });
 

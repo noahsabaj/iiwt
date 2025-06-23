@@ -48,7 +48,10 @@ export class RateLimiter {
     
     this.requests.set(this.config.name, validRequests);
     
-    console.log(`${this.config.name}: ${validRequests.length}/${this.config.maxRequests} requests in current window`);
+    // Only log in development mode
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`${this.config.name}: ${validRequests.length}/${this.config.maxRequests} requests in current window`);
+    }
   }
 
   /**

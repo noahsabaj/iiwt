@@ -69,25 +69,34 @@ class ConfigService {
    * Get NewsAPI URL (direct or proxied)
    */
   getNewsApiUrl(endpoint: string): string {
-    if (this.config.newsProxyUrl) {
-      return `${this.config.newsProxyUrl}${endpoint}`;
-    }
-    return `https://newsapi.org/v2${endpoint}`;
+    // Always use backend proxy in production
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
+    return `${backendUrl}/api/news${endpoint}`;
+  }
+  
+  getOsintApiUrl(service: string, endpoint: string): string {
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
+    return `${backendUrl}/api/osint/${service}${endpoint}`;
+  }
+  
+  getAuthApiUrl(endpoint: string): string {
+    const backendUrl = process.env.REACT_APP_BACKEND_URL || 'http://localhost:3001';
+    return `${backendUrl}/api/auth${endpoint}`;
   }
 
   /**
-   * Log configuration status
+   * Log configuration status (development only)
    */
   logStatus(): void {
-    console.log('🔧 Configuration Status:');
-    console.log(`- Demo Mode: ${this.config.isDemoMode ? 'ENABLED' : 'DISABLED'}`);
-    console.log(`- NewsAPI: ${this.isApiConfigured('news') ? 'Configured' : 'Not configured'}`);
-    console.log(`- ACLED: ${this.isApiConfigured('acled') ? 'Configured' : 'Not configured'}`);
-    console.log(`- NASA FIRMS: ${this.isApiConfigured('firms') ? 'Configured' : 'Not configured'}`);
-    
-    if (this.config.isDemoMode) {
-      console.log('ℹ️  Running in demo mode with simulated data');
-      console.log('💡 To use real data, add API keys to .env.local file');
+    // Only log in development mode to prevent information disclosure
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 Configuration Status:');
+      console.log(`- Demo Mode: ${this.config.isDemoMode ? 'ENABLED' : 'DISABLED'}`);
+      console.log(`- APIs configured: ${this.config.isDemoMode ? 0 : 'Check config'}`);
+      
+      if (this.config.isDemoMode) {
+        console.log('ℹ️  Running in demo mode');
+      }
     }
   }
 }

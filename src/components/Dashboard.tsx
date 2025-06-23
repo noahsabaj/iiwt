@@ -10,11 +10,19 @@ import {
   Alert,
   Fab,
   Badge,
+  Button,
+  IconButton,
+  Menu,
+  MenuItem,
+  Avatar,
 } from '@mui/material';
 import {
   Warning as WarningIcon,
   Notifications as NotificationsIcon,
   Schedule as ScheduleIcon,
+  Login as LoginIcon,
+  AccountCircle as AccountIcon,
+  Logout as LogoutIcon,
 } from '@mui/icons-material';
 import CasualtyCounter from './CasualtyCounter';
 import NuclearFacilitiesMonitor from './NuclearFacilitiesMonitor';
@@ -32,11 +40,16 @@ import RegionalAlliesMonitor from './RegionalAlliesMonitor';
 import SourceCodeViewer from './SourceCodeViewer';
 import OSINTDashboard from './OSINTDashboard';
 import DemoModeNotification from './DemoModeNotification';
+import LoginDialog from './LoginDialog';
+import { useAuth } from '../contexts/AuthContext';
 
 const Dashboard: React.FC = () => {
+  const { user, isAuthenticated, logout } = useAuth();
   const [alertCount, setAlertCount] = useState(3);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const [alertModalOpen, setAlertModalOpen] = useState(false);
+  const [loginDialogOpen, setLoginDialogOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -48,6 +61,19 @@ const Dashboard: React.FC = () => {
 
   const conflictStartDate = new Date('2025-06-13T00:00:00Z');
   const daysSinceStart = Math.floor((Date.now() - conflictStartDate.getTime()) / (1000 * 60 * 60 * 24));
+
+  const handleUserMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleUserMenuClose = () => {
+    setAnchorEl(null);
+  };
+
+  const handleLogout = () => {
+    logout();
+    handleUserMenuClose();
+  };
 
   return (
     <Box sx={{ flexGrow: 1, minHeight: '100vh' }}>
@@ -66,6 +92,55 @@ const Dashboard: React.FC = () => {
             sx={{ mr: 2, fontWeight: 600 }}
           />
           <LiveClock />
+          
+          {/* Auth Section */}
+          <Box sx={{ ml: 2 }}>
+            {isAuthenticated && user ? (
+              <>
+                <IconButton
+                  onClick={handleUserMenuOpen}
+                  color="inherit"
+                  sx={{ p: 0.5 }}
+                >
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: 'rgba(255,255,255,0.2)' }}>
+                    {user.username?.[0]?.toUpperCase() || user.email[0].toUpperCase()}
+                  </Avatar>
+                </IconButton>
+                <Menu
+                  anchorEl={anchorEl}
+                  open={Boolean(anchorEl)}
+                  onClose={handleUserMenuClose}
+                  anchorOrigin={{
+                    vertical: 'bottom',
+                    horizontal: 'right',
+                  }}
+                  transformOrigin={{
+                    vertical: 'top',
+                    horizontal: 'right',
+                  }}
+                >
+                  <MenuItem disabled>
+                    <Typography variant="caption">
+                      {user.email}
+                    </Typography>
+                  </MenuItem>
+                  <MenuItem onClick={handleLogout}>
+                    <LogoutIcon sx={{ mr: 1, fontSize: 20 }} />
+                    Logout
+                  </MenuItem>
+                </Menu>
+              </>
+            ) : (
+              <Button
+                color="inherit"
+                startIcon={<LoginIcon />}
+                onClick={() => setLoginDialogOpen(true)}
+                size="small"
+              >
+                Login
+              </Button>
+            )}
+          </Box>
         </Toolbar>
       </AppBar>
 
@@ -160,6 +235,12 @@ const Dashboard: React.FC = () => {
 
       {/* Data Source Indicator */}
       <DataSourceIndicator />
+      
+      {/* Login Dialog */}
+      <LoginDialog 
+        open={loginDialogOpen} 
+        onClose={() => setLoginDialogOpen(false)} 
+      />
     </Box>
   );
 };

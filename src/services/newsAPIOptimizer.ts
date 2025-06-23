@@ -6,6 +6,7 @@
 import { NewsArticle } from '../types';
 import { configService } from './ConfigService';
 import { newsApiRateLimiter } from './RateLimiter';
+import { authService } from './authService';
 
 interface NewsAPIResponse {
   status: string;
@@ -89,14 +90,14 @@ export class NewsAPIOptimizer {
     const cacheKey = 'breaking-news';
     const cached = this.getFromCache(cacheKey);
     if (cached) {
-      console.log('Using cached breaking news (saving API calls)');
+      // Using cached data
       return cached;
     }
     
     try {
       // Check rate limit
       if (!newsApiRateLimiter.canMakeRequest()) {
-        console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+        // Rate limit reached
         return [];
       }
       
@@ -106,15 +107,13 @@ export class NewsAPIOptimizer {
         pageSize: '50'
       });
       
-      if (this.apiKey) {
-        params.append('apiKey', this.apiKey);
-      }
+      // API key is now handled by backend proxy
 
       const response = await fetch(`${this.baseUrl}/top-headlines?${params}`);
       
       if (!response.ok) {
         if (response.status === 426) {
-          console.log('NewsAPI: Daily limit (100 requests) exceeded. Consider upgrading to a paid plan.');
+          // Rate limit exceeded
           return [];
         }
         throw new Error(`API error: ${response.status}`);
@@ -134,7 +133,7 @@ export class NewsAPIOptimizer {
       if (conflictArticles.length < 10) {
         // Check rate limit before second request
         if (!newsApiRateLimiter.canMakeRequest()) {
-          console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+          // Rate limit reached
           return conflictArticles; // Return what we have
         }
         
@@ -144,9 +143,7 @@ export class NewsAPIOptimizer {
           pageSize: '30'
         });
         
-        if (this.apiKey) {
-          keywordParams.append('apiKey', this.apiKey);
-        }
+        // API key is now handled by backend proxy
 
         const keywordResponse = await fetch(`${this.baseUrl}/top-headlines?${keywordParams}`);
         
@@ -186,7 +183,7 @@ export class NewsAPIOptimizer {
     const cacheKey = `historical-${hoursBack}h`;
     const cached = this.getFromCache(cacheKey);
     if (cached) {
-      console.log('Using cached historical data (saving API calls)');
+      // Using cached data
       return cached;
     }
     
@@ -196,7 +193,7 @@ export class NewsAPIOptimizer {
     try {
       // Check rate limit
       if (!newsApiRateLimiter.canMakeRequest()) {
-        console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+        // Rate limit reached
         return [];
       }
       
@@ -209,15 +206,13 @@ export class NewsAPIOptimizer {
         pageSize: '100'
       });
       
-      if (this.apiKey) {
-        params.append('apiKey', this.apiKey);
-      }
+      // API key is now handled by backend proxy
 
       const response = await fetch(`${this.baseUrl}/everything?${params}`);
       
       if (!response.ok) {
         if (response.status === 426) {
-          console.log('NewsAPI: Daily limit exceeded on historical data request.');
+          // Rate limit exceeded
           return [];
         }
         throw new Error(`API error: ${response.status}`);
@@ -323,13 +318,13 @@ export class NewsAPIOptimizer {
     const cacheKey = `operations-${operationNames.join('-')}`;
     const cached = this.getFromCache(cacheKey);
     if (cached) {
-      console.log('Using cached operation news (saving API calls)');
+      // Using cached data
       return cached;
     }
     
     // Check rate limit
     if (!newsApiRateLimiter.canMakeRequest()) {
-      console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+      // Rate limit reached
       return [];
     }
     
@@ -343,15 +338,13 @@ export class NewsAPIOptimizer {
         pageSize: '50'
       });
       
-      if (this.apiKey) {
-        params.append('apiKey', this.apiKey);
-      }
+      // API key is now handled by backend proxy
 
       const response = await fetch(`${this.baseUrl}/everything?${params}`);
       
       if (!response.ok) {
         if (response.status === 426) {
-          console.log('NewsAPI: Daily limit exceeded on operation news request.');
+          // Rate limit exceeded
           return [];
         }
         throw new Error(`API error: ${response.status}`);
@@ -380,13 +373,13 @@ export class NewsAPIOptimizer {
     const cacheKey = 'regional-sources';
     const cached = this.getFromCache(cacheKey);
     if (cached) {
-      console.log('Using cached regional sources (saving API calls)');
+      // Using cached data
       return cached;
     }
     
     // Check rate limit
     if (!newsApiRateLimiter.canMakeRequest()) {
-      console.log(`NewsAPI rate limit reached. Remaining today: ${newsApiRateLimiter.getRemainingRequests()}`);
+      // Rate limit reached
       return [];
     }
     
@@ -396,15 +389,13 @@ export class NewsAPIOptimizer {
         language: 'en'
       });
       
-      if (this.apiKey) {
-        params.append('apiKey', this.apiKey);
-      }
+      // API key is now handled by backend proxy
 
       const response = await fetch(`${this.baseUrl}/sources?${params}`);
       
       if (!response.ok) {
         if (response.status === 426) {
-          console.log('NewsAPI: Daily limit exceeded on sources request.');
+          // Rate limit exceeded
           return [];
         }
         throw new Error(`API error: ${response.status}`);
