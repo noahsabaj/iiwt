@@ -104,10 +104,7 @@ class NewsService {
         pageSize: '100'
       });
 
-      // Add API key to params for CORS-friendly request
-      if (this.apiKey) {
-        params.append('apiKey', this.apiKey);
-      }
+      // API key is now handled by backend proxy
 
       const response = await fetch(`${this.baseUrl}/top-headlines?${params}`, {
         headers: authService.getAuthHeaders()
@@ -167,12 +164,10 @@ class NewsService {
       pageSize: '20'
     });
 
-    // Add API key to params
-    if (this.apiKey) {
-      params.append('apiKey', this.apiKey);
-    }
-
-    const response = await fetch(`${this.baseUrl}/everything?${params}`);
+    // API key is now handled by backend proxy
+    const response = await fetch(`${this.baseUrl}/everything?${params}`, {
+      headers: authService.getAuthHeaders()
+    });
 
     if (!response.ok) {
       throw new Error(`News API error: ${response.status}`);

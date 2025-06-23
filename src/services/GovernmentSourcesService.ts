@@ -132,19 +132,28 @@ class GovernmentSourcesService {
     }
 
     try {
-      // ReliefWeb API v1 format - use query parameter with JSON
-      const query = {
-        value: '(country:"Iran" OR country:"Israel") AND (conflict OR humanitarian OR crisis)',
-        fields: ['country', 'title', 'body']
-      };
-      
+      // ReliefWeb API v1 format - correct query structure
       const params = new URLSearchParams({
         appname: 'conflict-tracker',
-        query: JSON.stringify(query),
-        fields: JSON.stringify({
-          include: ['title', 'body', 'date', 'source', 'url']
+        filter: JSON.stringify({
+          operator: 'AND',
+          conditions: [
+            {
+              field: 'country.name',
+              value: ['Iran', 'Israel'],
+              operator: 'OR'
+            },
+            {
+              field: 'title',
+              value: 'conflict OR humanitarian OR crisis'
+            }
+          ]
         }),
-        limit: '10'
+        fields: JSON.stringify({
+          include: ['title', 'body', 'date', 'source', 'url', 'country']
+        }),
+        limit: '10',
+        sort: JSON.stringify(['date:desc'])
       });
 
       const response = await fetch(`https://api.reliefweb.int/v1/reports?${params}`, {
