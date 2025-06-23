@@ -333,15 +333,33 @@ export class NLPService {
   private extractDates(doc: any, text: string): ExtractedEntities['dates'] {
     const dates: ExtractedEntities['dates'] = [];
     
-    // Use compromise to find dates
-    const datesFound = doc.dates().json();
-    datesFound.forEach((date: any) => {
-      dates.push({
-        text: date.text,
-        date: new Date(date.text),
-        context: this.extractContext(text, date.text),
-      });
-    });
+    // Use compromise to find dates - dates() method might not exist in newer versions
+    // Instead, use match patterns for common date formats
+    const datePatterns = [
+      { pattern: /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, format: 'MM/DD/YYYY' },
+      { pattern: /\b\d{1,2}-\d{1,2}-\d{2,4}\b/g, format: 'MM-DD-YYYY' },
+      { pattern: /\b\d{4}-\d{1,2}-\d{1,2}\b/g, format: 'YYYY-MM-DD' },
+      { pattern: /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/gi, format: 'Month DD, YYYY' },
+      { pattern: /\b\d{1,2}\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/gi, format: 'DD Month YYYY' }
+    ];
+
+    for (const { pattern } of datePatterns) {
+      let match;
+      pattern.lastIndex = 0;
+      while ((match = pattern.exec(text)) !== null) {
+        const dateText = match[0];
+        const parsedDate = new Date(dateText);
+        
+        // Only add valid dates
+        if (!isNaN(parsedDate.getTime())) {
+          dates.push({
+            text: dateText,
+            date: parsedDate,
+            context: this.extractContext(text, dateText),
+          });
+        }
+      }
+    }
 
     // Additional patterns for relative dates
     const relativePatterns = [

@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 interface ExportData {
   title: string;
@@ -50,7 +50,7 @@ export const exportToPDF = async (data: ExportData) => {
         event.location || 'N/A'
       ]);
       
-      (pdf as any).autoTable({
+      autoTable(pdf, {
         head: [['Time', 'Event', 'Severity', 'Location']],
         body: timelineData,
         startY: yPosition,
@@ -91,7 +91,7 @@ export const exportToPDF = async (data: ExportData) => {
         facility.lastUpdate ? new Date(facility.lastUpdate).toLocaleDateString() : 'N/A'
       ]);
       
-      (pdf as any).autoTable({
+      autoTable(pdf, {
         head: [['Facility', 'Status', 'Last Update']],
         body: facilityData,
         startY: yPosition,
